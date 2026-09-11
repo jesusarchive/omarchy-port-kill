@@ -104,9 +104,9 @@ Panel {
     if (!a) return ""
     if (a.all) {
       var n = ownedCount
-      return (a.force ? "Force kill " : "Stop ") + "all " + n + (n === 1 ? " process" : " processes") + " listening on your ports?"
+      return (a.force ? "Force kill " : "Kill ") + "all " + n + (n === 1 ? " process" : " processes") + " listening on your ports?"
     }
-    var verb = a.force ? "Force kill " : "Stop "
+    var verb = a.force ? "Force kill " : "Kill "
     var text = verb + Model.rowLabel(a.row) + " on " + a.row.proto.toUpperCase() + " :" + a.row.port + "?"
     if (!a.row.owned) text += "\nOwned by " + a.row.user + " — you'll be asked for your password."
     return text
@@ -162,7 +162,7 @@ Panel {
     function toggle(): void { root.toggle() }
     function refresh(): string { ports.refresh(); return "ok" }
     function list(): string { return JSON.stringify(ports.rows) }
-    // Scripting hook: stops the process on one of your own TCP ports, no dialog.
+    // Scripting hook: kills the process on one of your own TCP ports, no dialog.
     function kill(port: string): string {
       var row = ports.findOwned(port)
       if (!row) return "not found"
@@ -274,24 +274,12 @@ Panel {
               }
             }
             trailingControl: Component {
-              Row {
-                spacing: Style.space(4)
-                PanelActionButton {
-                  iconText: Model.glyph.refresh
-                  tooltipText: "Refresh  (r)"
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                  onClicked: ports.refresh()
-                }
-                PanelActionButton {
-                  iconText: Model.glyph.killAll
-                  tooltipText: "Stop all your ports  (a)"
-                  foreground: root.foreground
-                  hoverColor: root.urgent
-                  fontFamily: root.fontFamily
-                  enabled: root.ownedCount > 0 && !ports.busy
-                  onClicked: root.askKillAll(false)
-                }
+              PanelActionButton {
+                iconText: Model.glyph.refresh
+                tooltipText: "Refresh  (r)"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: ports.refresh()
               }
             }
           }
@@ -307,10 +295,56 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
-          PanelSectionHeader {
-            text: "YOUR PORTS"
-            foreground: root.foreground
-            fontFamily: root.fontFamily
+          // Kill all only touches your ports, so it lives on this section's
+          // header, right-aligned with the per-row kill buttons.
+          Item {
+            width: parent.width
+            implicitHeight: Math.max(yourHeader.implicitHeight, killAllRow.visible ? killAllButton.implicitHeight : 0)
+
+            PanelSectionHeader {
+              id: yourHeader
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              text: "YOUR PORTS"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            Row {
+              id: killAllRow
+              visible: root.ownedCount > 0
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(6)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(4)
+              readonly property bool hot: killAllHover.hovered || killAllButton._hot
+
+              Text {
+                id: killAllText
+                textFormat: Text.PlainText
+                anchors.verticalCenter: parent.verticalCenter
+                text: "kill all"
+                color: killAllRow.hot && !ports.busy ? root.urgent : root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+
+                HoverHandler { id: killAllHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { enabled: !ports.busy; onTapped: root.askKillAll(false) }
+              }
+
+              PanelActionButton {
+                id: killAllButton
+                iconText: Model.glyph.killAll
+                tooltipText: "Kill all your ports  (a)"
+                foreground: root.foreground
+                hoverColor: root.urgent
+                hasCursor: killAllHover.hovered
+                fontFamily: root.fontFamily
+                enabled: !ports.busy
+                onClicked: root.askKillAll(false)
+              }
+            }
           }
 
           Text {
@@ -375,7 +409,7 @@ Panel {
           Text {
             textFormat: Text.PlainText
             width: parent.width
-            text: "↵ stop · K force · a stop all · o open · c copy · r refresh"
+            text: "↵ kill · K force kill · a kill all · o open · c copy · r refresh"
             color: root.dim
             opacity: 0.8
             font.family: root.fontFamily
@@ -392,7 +426,7 @@ Panel {
         z: 10
         opened: root.confirmOpen
         message: root.confirmMessage()
-        confirmText: root.confirmAction && root.confirmAction.force ? "Kill" : "Stop"
+        confirmText: root.confirmAction && root.confirmAction.force ? "Force kill" : "Kill"
         fontFamily: root.fontFamily
         onCanceled: root.cancelConfirm()
         onConfirmed: root.confirm()
@@ -468,7 +502,7 @@ Panel {
 
       PanelActionButton {
         iconText: Model.glyph.kill
-        tooltipText: portRow.row && portRow.row.owned ? "Stop  (↵)" : "Stop as root  (↵)"
+        tooltipText: portRow.row && portRow.row.owned ? "Kill  (↵)" : "Kill as root  (↵)"
         foreground: root.foreground
         hoverColor: root.urgent
         fontFamily: root.fontFamily

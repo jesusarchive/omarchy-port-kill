@@ -1,7 +1,7 @@
 # Port Killer for Omarchy
 
 A bar widget for the [Omarchy](https://omarchy.org) shell that shows what's
-listening on which port, and lets you stop it without leaving the desktop.
+listening on which port, and lets you kill it without leaving the desktop.
 It's for the dev server that didn't shut down properly and is still holding
 `:3000`.
 
@@ -10,11 +10,11 @@ It's for the dev server that didn't shut down properly and is still holding
 - The bar icon shows how many of **your** processes hold a listening port.
 - For each port, the panel shows the command, the **project directory** it
   was started from, the pid, uptime, and bind addresses.
-- **Stop** sends SIGTERM and escalates to SIGKILL if the process hasn't exited
-  after 3 s. **Force** sends SIGKILL right away. **Stop all** clears every port
+- **Kill** sends SIGTERM and escalates to SIGKILL if the process hasn't exited
+  after 3 s. **Force kill** sends SIGKILL right away. **Kill all** clears every port
   you own.
 - **System ports** (owned by root or service users) are labelled with their
-  systemd unit. Stopping one asks for your password through Omarchy's polkit
+  systemd unit. Killing one asks for your password through Omarchy's polkit
   dialog.
 - You can filter which ports are shown and hide processes by name.
   Everything is keyboard-driven like the built-in Omarchy panels.
@@ -43,19 +43,19 @@ URLs. All three ship with Omarchy.
 |---|---|
 | Bar: left click | open the panel |
 | Bar: right click | refresh |
-| Bar: middle click | stop all your ports (asks first) |
+| Bar: middle click | kill all your ports (asks first) |
 | Row: click | open `http://localhost:<port>` |
 | Row: middle click | copy the URL |
-| Row: close button | stop the process (asks first) |
+| Row: kill button | kill the process (asks first) |
 
 Keys while the panel is open:
 
 | Key | Action |
 |---|---|
 | `j` / `k` / arrows | move |
-| `Enter` / `x` | stop the selected process |
+| `Enter` / `x` | kill the selected process |
 | `K` | force kill it with SIGKILL |
-| `a` / `A` | stop / force kill all your ports |
+| `a` / `A` | kill / force kill all your ports |
 | `o` | open in the browser |
 | `c` | copy the URL |
 | `r` | refresh |
@@ -105,7 +105,7 @@ or in Omarchy's settings panel:
   can't signal a reused pid. It then sends TERM, waits up to 3 s, and sends
   KILL. For system ports the same script runs under `pkexec`. PID 1 is never
   signalled: with socket activation, systemd holds the socket too.
-- Stopping a systemd service's process usually just makes systemd restart it.
+- Killing a systemd service's process usually just makes systemd restart it.
   For services, `systemctl stop <unit>` is the right tool.
 
 ## Development

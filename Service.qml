@@ -92,7 +92,8 @@ Item {
     var sig = force ? "KILL" : "TERM"
     var command = ["bash", killScript, "port", row.proto, String(row.port), sig]
     if (!row.owned) command = ["pkexec"].concat(command)
-    run(command, (force ? "Force killing " : "Stopping ") + Model.rowLabel(row) + " on :" + row.port + "…")
+    var target = Model.rowLabel(row) + " on :" + row.port
+    run(command, (force ? "Force killing " : "Killing ") + target + "…", (force ? "Force killed " : "Killed ") + target)
   }
 
   function killAllOwned(force) {
@@ -104,14 +105,15 @@ Item {
         if (pids.indexOf(pid) === -1) pids.push(pid)
       }
     }
+    var target = pids.length + (pids.length === 1 ? " process" : " processes")
     run(["bash", killScript, "pids", force ? "KILL" : "TERM"].concat(pids),
-      "Stopping " + pids.length + (pids.length === 1 ? " process…" : " processes…"))
+      (force ? "Force killing " : "Killing ") + target + "…", (force ? "Force killed " : "Killed ") + target)
   }
 
-  function run(command, label) {
+  function run(command, label, doneLabel) {
     _killOutput = ""
     _killError = ""
-    _pendingLabel = label
+    _pendingLabel = doneLabel
     actionStatus = label
     lastError = ""
     killProcess.command = command
@@ -160,7 +162,7 @@ Item {
     onExited: function(exitCode) {
       var stderr = String(killStderr.text || root._killError || "")
       if (exitCode === 0) {
-        root.actionStatus = root._pendingLabel.replace(/^Stopping /, "Stopped ").replace(/^Force killing /, "Killed ").replace(/…$/, "")
+        root.actionStatus = root._pendingLabel
         actionStatusTimer.restart()
       } else {
         root.actionStatus = ""
