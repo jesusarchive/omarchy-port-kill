@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "jesusarchive.port-killer",
+  "name": "Port Killer",
+  "version": "0.1.0",
+  "author": "jesusarchive",
+  "license": "MIT",
+  "description": "See which processes are listening on which ports and stop them from the Omarchy bar.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Port Killer",
+    "description": "Lists listening ports with the process, project directory, and uptime behind each one. Stop one, force kill, or stop all of yours. Root-owned ports are stopped through the polkit password dialog.",
+    "category": "System",
+    "aliases": ["ports", "port-kill", "kill-port"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 5,
+      "ports": "",
+      "ignorePorts": "",
+      "ignoreProcesses": "",
+      "includeUdp": false,
+      "showSystemPorts": true,
+      "hideWhenEmpty": false
+    },
+    "schema": [
+      { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (seconds)", "min": 2, "max": 300, "step": 1, "defaultValue": 5 },
+      { "key": "ports", "type": "string", "label": "Only these ports", "defaultValue": "", "description": "Optional. Ports or ranges such as 3000,5173,8000-8999. Empty shows every port." },
+      { "key": "ignorePorts", "type": "string", "label": "Ignore ports", "defaultValue": "", "description": "Ports or ranges to hide, such as 53,631." },
+      { "key": "ignoreProcesses", "type": "string", "label": "Ignore processes", "defaultValue": "", "description": "Process or systemd unit names to hide, such as cups,avahi-daemon." },
+      { "key": "includeUdp", "type": "boolean", "label": "Include UDP", "defaultValue": false },
+      { "key": "showSystemPorts", "type": "boolean", "label": "Show system ports", "defaultValue": true, "description": "Ports owned by root or other users. Stopping one asks for your password." },
+      { "key": "hideWhenEmpty", "type": "boolean", "label": "Hide when nothing is listening", "defaultValue": false, "description": "Hide the bar icon while none of your processes hold a port." }
+    ]
+  }
+}
