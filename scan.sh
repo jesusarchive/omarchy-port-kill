@@ -1,39 +1,62 @@
 #!/usr/bin/env bash
 
-# Lists listening sockets for the Port Killer panel, one tagged line each:
+# List TCP listeners owned by the current user in the requested port range.
+# Port Kill defaults to development ports 2000 through 9000. Model.js parses
+# two tagged record types:
 #
-#   S<TAB><ss line>                          every listening TCP/UDP socket
-#   P<TAB>pid<TAB>elapsed<TAB>cwd<TAB>args    every process ss could attribute
-#   U<TAB>uid<TAB>name                        owner names for socket uids
-#
-# Model.js parses this. ss only attributes sockets to processes the caller can
-# inspect, so rows without a pid belong to root or another user.
+#   S<TAB><ss line>
+#   P<TAB>pid<TAB>start-time<TAB>uid
 
 set -o pipefail
+export LC_ALL=C
 
-sockets=$(ss -H -l -n -p -e -t -u) || exit 1
+start_port=${1:-2000}
+end_port=${2:-9000}
+
+[[ $start_port =~ ^[0-9]+$ && $end_port =~ ^[0-9]+$ ]] || {
+  printf 'Invalid port range\n' >&2
+  exit 2
+}
+((start_port >= 1 && end_port <= 65535 && start_port <= end_port)) || {
+  printf 'Invalid port range\n' >&2
+  exit 2
+}
+
+process_start_time() {
+  local stat rest
+  IFS= read -r stat <"/proc/$1/stat" || return 1
+  rest=${stat##*) }
+  read -r -a fields <<<"$rest"
+  ((${#fields[@]} > 19)) || return 1
+  printf '%s\n' "${fields[19]}"
+}
+
+sockets=$(ss -H -l -n -p -t) || exit 1
 [[ -n $sockets ]] || exit 0
 
-sed 's/^/S\t/' <<<"$sockets"
+declare -A socket_pids=()
+while IFS= read -r line; do
+  read -r -a fields <<<"$line"
+  ((${#fields[@]} >= 5)) || continue
+  port=${fields[3]##*:}
+  [[ $port =~ ^[0-9]+$ ]] || continue
+  ((port >= start_port && port <= end_port)) || continue
 
-clean() { tr '\0\t\n' '   ' | sed 's/ *$//'; }
-
-pids=$(grep -o 'pid=[0-9]*' <<<"$sockets" | cut -d= -f2 | sort -un)
-if [[ -n $pids ]]; then
-  declare -A elapsed
-  while read -r pid secs; do
-    elapsed[$pid]=$secs
-  done < <(ps -o pid=,etimes= -p "${pids//$'\n'/,}")
-
-  for pid in $pids; do
-    [[ -r /proc/$pid/cmdline ]] || continue
-    cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null | clean)
-    args=$(clean 2>/dev/null <"/proc/$pid/cmdline")
-    printf 'P\t%s\t%s\t%s\t%s\n' "$pid" "${elapsed[$pid]:-}" "$cwd" "$args"
+  printf 'S\t%s\n' "$line"
+  remaining=$line
+  while [[ $remaining =~ pid=([0-9]+) ]]; do
+    pid=${BASH_REMATCH[1]}
+    socket_pids[$pid]=1
+    remaining=${remaining#*"pid=$pid"}
   done
-fi
+done <<<"$sockets"
 
-# ss omits uid:0, so always resolve root alongside the uids it did print.
-uids=$( (echo 0; grep -o 'uid:[0-9]*' <<<"$sockets" | cut -d: -f2) | sort -un)
-getent passwd $uids | awk -F: '{ printf "U\t%s\t%s\n", $3, $1 }'
-exit 0
+current_uid=$(id -u)
+for pid in "${!socket_pids[@]}"; do
+  [[ $pid =~ ^[0-9]+$ && $pid != 1 ]] || continue
+  [[ -r /proc/$pid/stat ]] || continue
+  uid=$(stat -c %u "/proc/$pid" 2>/dev/null) || continue
+  [[ $uid == "$current_uid" ]] || continue
+  start_time=$(process_start_time "$pid") || continue
+  printf 'P\t%s\t%s\t%s\n' "$pid" "$start_time" "$uid"
+done
