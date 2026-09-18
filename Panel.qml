@@ -12,10 +12,8 @@ Panel {
   property int cursorIndex: 0
 
   readonly property int processCount: Model.processCount(ports.rows)
-  readonly property int itemCount: ports.rows.length > 0 ? ports.rows.length + 1 : 0
+  readonly property int itemCount: ports.rows.length + 1
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
-  readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property real menuWidth: Math.max(
     Style.space(270),
@@ -37,13 +35,11 @@ Panel {
   }
 
   function setCursor(index) {
-    if (itemCount === 0) return
     cursorIndex = Math.max(0, Math.min(itemCount - 1, index))
     scrollCursorIntoView()
   }
 
   function moveCursor(delta) {
-    if (itemCount === 0) return
     setCursor(cursorIndex + delta)
   }
 
@@ -67,19 +63,17 @@ Panel {
   }
 
   function kill(row) {
-    if (!row || ports.busy) return
-    ports.kill(row)
+    if (!row) return
+    if (!ports.busy) ports.kill(row)
     close()
   }
 
   function killAll() {
-    if (ports.rows.length === 0 || ports.busy) return
-    ports.killAll()
+    if (!ports.busy) ports.killAll()
     close()
   }
 
   function activateCursor() {
-    if (itemCount === 0) return
     if (cursorIndex === 0) killAll()
     else kill(selectedRow())
   }
@@ -108,14 +102,30 @@ Panel {
     font.bold: true
   }
 
-  WidgetButton {
+  BarIconButton {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: vertical ? String(root.processCount) : "ports " + root.processCount
-    fontSize: Style.font.body
-    dimmed: ports.loaded && root.processCount === 0
-    tooltipText: root.processCount === 1 ? "1 listening process" : root.processCount + " listening processes"
+    iconComponent: Component {
+      Item {
+        Rectangle {
+          anchors.centerIn: parent
+          width: Math.round(parent.height * 0.72)
+          height: width
+          color: "#ffffff"
+
+          Rectangle {
+            anchors.centerIn: parent
+            width: Math.round(parent.width * 0.32)
+            height: width
+            color: root.processCount > 0 ? "#ff0000" : "#00ff00"
+          }
+        }
+      }
+    }
+    tooltipText: root.processCount === 0
+      ? "No development processes running"
+      : root.processCount + " development process(es) running"
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.RightButton) ports.refresh()
       else root.toggle()
@@ -168,16 +178,13 @@ Panel {
           MenuEntry {
             id: killAllItem
             width: parent.width
-            visible: ports.rows.length > 0
             label: "Kill All Processes"
             navIndex: 0
-            enabled: !ports.busy
             onTriggered: root.killAll()
           }
 
           PanelSeparator {
             width: parent.width
-            visible: ports.rows.length > 0
             foreground: root.foreground
           }
 
@@ -190,36 +197,8 @@ Panel {
               width: parent.width
               label: Model.menuLabel(modelData)
               navIndex: index + 1
-              enabled: !ports.busy
               onTriggered: root.kill(modelData)
             }
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            visible: ports.loaded && ports.rows.length === 0 && ports.lastError === ""
-            width: parent.width
-            topPadding: Style.space(16)
-            bottomPadding: Style.space(16)
-            text: "No listening processes"
-            color: root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-            horizontalAlignment: Text.AlignHCenter
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            visible: ports.lastError !== ""
-            width: parent.width
-            leftPadding: Style.space(10)
-            rightPadding: Style.space(10)
-            topPadding: Style.space(8)
-            text: ports.lastError
-            color: root.urgent
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
-            wrapMode: Text.WordWrap
           }
         }
       }

@@ -9,7 +9,6 @@ Item {
   property var settings: ({})
   property var rows: []
   property bool loaded: false
-  property string lastError: ""
 
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 5, 2, 300)
   readonly property int startPort: 2000
@@ -56,7 +55,6 @@ Item {
       rows = next
     }
     loaded = true
-    lastError = ""
   }
 
   function kill(row) {
@@ -65,13 +63,12 @@ Item {
   }
 
   function killAll() {
-    if (rows.length === 0 || killProcess.running) return
+    if (killProcess.running) return
     startKill(["bash", killScript, "TERM", "all", String(startPort), String(endPort)])
   }
 
   function startKill(command) {
     _killError = ""
-    lastError = ""
     killProcess.command = command
     killProcess.running = true
   }
@@ -109,7 +106,7 @@ Item {
       var stdout = String(scanStdout.text || root._scanOutput || "")
       var stderr = String(scanStderr.text || root._scanError || "")
       if (exitCode === 0) root.applyScan(stdout)
-      else root.lastError = root.elide(stderr || "Could not list listening ports")
+      else console.warn("Port Killer: " + root.elide(stderr || "Could not list listening ports"))
     }
   }
 
@@ -124,7 +121,7 @@ Item {
     }
     onExited: function(exitCode) {
       var stderr = String(killStderr.text || root._killError || "")
-      if (exitCode !== 0) root.lastError = root.elide(stderr || "Kill command exited with code " + exitCode)
+      if (exitCode !== 0) console.warn("Port Killer: " + root.elide(stderr || "Kill command exited with code " + exitCode))
       root.refresh()
     }
   }
