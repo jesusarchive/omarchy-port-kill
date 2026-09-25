@@ -12,7 +12,7 @@ and menu while the console monitor is running.
 ## Requirements
 
 - [Omarchy Quattro](https://omarchy.org/).
-- Port Kill's `port-kill-console` binary. Follow its [installation instructions](https://github.com/treadiehq/port-kill#install).
+- Port Kill, installed using its [official installer](https://github.com/treadiehq/port-kill#install).
 - `lsof`, which Port Kill uses to find listening processes. Install it separately:
 
   ```bash
