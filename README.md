@@ -1,7 +1,7 @@
 # Port Kill for Omarchy
 
 View and stop development processes from the Omarchy bar with
-[Port Kill](https://portkill.com/).
+[Port Kill](https://portkill.com/) ([GitHub](https://github.com/treadiehq/port-kill)).
 
 ![Port Kill menu and terminal](preview.png)
 
@@ -29,21 +29,26 @@ them; the plugin adds a bar icon and menu while its monitor is running.
 omarchy plugin add https://github.com/jesusarchive/omarchy-port-kill.git --enable
 ```
 
-Add Port Kill to the app launcher:
+Add Port Kill to the app launcher with immediate bar updates on startup and exit:
 
 ```bash
 omarchy tui install "Port Kill" "bash $HOME/.config/omarchy/plugins/jesusarchive.port-kill/portkill.sh launch" float \
   https://raw.githubusercontent.com/treadiehq/port-kill/main/assets/port-kill.png
 ```
 
+Or launch `port-kill-console` directly. The bar detects it on its next refresh:
+
+```bash
+omarchy tui install "Port Kill" port-kill-console float \
+  https://raw.githubusercontent.com/treadiehq/port-kill/main/assets/port-kill.png
+```
+
+Either command replaces an existing Port Kill launcher entry.
+
 ## Use
 
-Select Port Kill in the app launcher. Its launch script notifies the bar at
-startup and exit, so the icon updates without waiting for the next regular check.
-If you already have a launcher, run the command above again to update it.
-
-You can also run `port-kill-console` in a terminal. Click the bar icon to open
-the menu.
+Select Port Kill in the app launcher or run `port-kill-console` in a terminal.
+Click the bar icon to open the menu.
 
 ![Port Kill menu](assets/menu.png)
 
