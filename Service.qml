@@ -81,6 +81,11 @@ Item {
     startKill(["bash", portKillScript, "kill-all"])
   }
 
+  function quit() {
+    if (killProcess.running) return
+    startKill(["bash", portKillScript, "quit"])
+  }
+
   function startKill(command) {
     _killError = ""
     killProcess.command = command

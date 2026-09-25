@@ -13,7 +13,9 @@ Panel {
   property int cursorIndex: 0
 
   readonly property int processCount: Model.processCount(ports.rows)
-  readonly property int itemCount: ports.rows.length + 1
+  // Kill All, one row per port, then Quit.
+  readonly property int itemCount: ports.rows.length + 2
+  readonly property int quitIndex: itemCount - 1
   readonly property bool needsSetup: ports.status === "missing" || ports.status === "no-lsof"
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
@@ -21,9 +23,12 @@ Panel {
   // edge rows isn't clipped at fractional display scales.
   readonly property int edgeInset: 1
   readonly property real menuHeight: menuColumn.implicitHeight + edgeInset * 2
+  // Row metrics follow Omarchy's tray menus.
+  readonly property int rowHeight: Style.space(30)
+  readonly property int labelInset: Style.space(28)
   readonly property real menuWidth: Math.max(
-    Style.space(270),
-    Math.min(Style.space(380), menuWidthMetrics.advanceWidth + Style.space(38))
+    Style.space(232),
+    Math.min(Style.space(380), menuWidthMetrics.advanceWidth + labelInset + Style.space(10) + panel.padding * 2 + edgeInset * 2)
   )
 
   function longestMenuLabel() {
@@ -50,7 +55,9 @@ Panel {
   }
 
   function cursorItem() {
-    return cursorIndex === 0 ? killAllItem : processRepeater.itemAt(cursorIndex - 1)
+    if (cursorIndex === 0) return killAllItem
+    if (cursorIndex === quitIndex) return quitItem
+    return processRepeater.itemAt(cursorIndex - 1)
   }
 
   function scrollCursorIntoView() {
@@ -80,8 +87,14 @@ Panel {
     close()
   }
 
+  function quit() {
+    ports.quit()
+    close()
+  }
+
   function activateCursor() {
     if (cursorIndex === 0) killAll()
+    else if (cursorIndex === quitIndex) quit()
     else kill(selectedRow())
   }
 
@@ -109,8 +122,7 @@ Panel {
     id: menuWidthMetrics
     text: root.longestMenuLabel()
     font.family: root.fontFamily
-    font.pixelSize: Style.font.body
-    font.bold: true
+    font.pixelSize: Style.font.bodySmall
   }
 
   BarIconButton {
@@ -152,6 +164,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
+    padding: Style.space(8)
+    borderSpec: Border.flat(Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.45), Math.max(1, Style.space(2)))
     contentWidth: panel.fittedContentWidth(root.menuWidth)
     contentHeight: panel.fittedContentHeight(root.menuHeight, Style.space(560))
 
@@ -187,7 +201,7 @@ Panel {
           x: root.edgeInset
           y: root.edgeInset
           width: menuFlick.width - root.edgeInset * 2
-          spacing: Style.space(4)
+          spacing: 0
 
           MenuEntry {
             id: killAllItem
@@ -216,6 +230,19 @@ Panel {
               onTriggered: root.kill(modelData)
             }
           }
+
+          PanelSeparator {
+            width: parent.width
+            foreground: root.foreground
+          }
+
+          MenuEntry {
+            id: quitItem
+            width: parent.width
+            label: "Quit"
+            navIndex: root.quitIndex
+            onTriggered: root.quit()
+          }
         }
       }
 
@@ -230,7 +257,7 @@ Panel {
 
     hasCursor: root.cursorIndex === navIndex
     foreground: root.foreground
-    implicitHeight: Style.space(46)
+    implicitHeight: root.rowHeight
     opacity: enabled ? 1 : 0.45
 
     MouseArea {
@@ -245,14 +272,13 @@ Panel {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
-      anchors.leftMargin: Style.space(10)
+      anchors.leftMargin: root.labelInset
       anchors.rightMargin: Style.space(10)
       textFormat: Text.PlainText
       text: entry.label
       color: root.foreground
       font.family: root.fontFamily
-      font.pixelSize: Style.font.body
-      font.bold: true
+      font.pixelSize: Style.font.bodySmall
       elide: Text.ElideRight
     }
   }

@@ -8,6 +8,7 @@
 #   portkill.sh list
 #   portkill.sh kill <port>
 #   portkill.sh kill-all
+#   portkill.sh quit
 #
 # Exit codes: 0 ok, 1 Port Kill failed, 2 usage, 3 Port Kill missing,
 # 4 lsof missing, 5 no Port Kill monitor running.
@@ -23,9 +24,10 @@ die() {
 }
 
 # Port Kill runs as a monitor when started from a terminal or the launcher.
-# One-shot calls, including the ones this script makes, don't count.
-monitor_running() {
-  local dir comm arg
+# One-shot calls, including the ones this script makes, don't count. Prints the
+# monitors' PIDs and fails when there are none.
+monitor_pids() {
+  local dir comm arg found=1
   local -a argv
   for dir in /proc/[0-9]*; do
     IFS= read -r comm <"$dir/comm" 2>/dev/null || continue
@@ -37,16 +39,17 @@ monitor_running() {
     for arg in "${argv[@]:1}"; do
       [[ $arg == --json || $arg == --kill-all ]] && continue 2
     done
-    return 0
+    printf '%s\n' "${dir#/proc/}"
+    found=0
   done
-  return 1
+  return "$found"
 }
 
 action=${1:-}
 case $action in
   list)
     (($# == 1)) || die "Usage: portkill.sh list"
-    monitor_running || die "Port Kill is not running" 5
+    monitor_pids >/dev/null || die "Port Kill is not running" 5
     ;;
   kill)
     (($# == 2)) || die "Usage: portkill.sh kill <port>"
@@ -55,6 +58,21 @@ case $action in
     ;;
   kill-all)
     (($# == 1)) || die "Usage: portkill.sh kill-all"
+    ;;
+  quit)
+    (($# == 1)) || die "Usage: portkill.sh quit"
+    # SIGTERM, not SIGINT: Port Kill started from a script or in the
+    # background ignores SIGINT, and it has no handler for either signal.
+    pids=$(monitor_pids) || exit 0
+    while IFS= read -r pid; do
+      kill -TERM "$pid" 2>/dev/null
+    done <<<"$pids"
+    # Wait for the monitors to exit so the widget's next refresh hides it.
+    for _ in {1..20}; do
+      monitor_pids >/dev/null || exit 0
+      read -rt 0.1 <> <(:)
+    done
+    die "Port Kill did not stop" 1
     ;;
   *)
     die "Unknown action: $action"
