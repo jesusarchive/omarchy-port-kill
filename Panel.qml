@@ -151,10 +151,7 @@ Panel {
       : ports.status === "no-lsof" ? "Port Kill needs lsof"
       : root.processCount === 0 ? "No development processes running"
       : root.processCount + (root.processCount === 1 ? " development process running" : " development processes running")
-    onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton) ports.refresh()
-      else root.toggle()
-    }
+    onPressed: root.toggle()
 
   }
 

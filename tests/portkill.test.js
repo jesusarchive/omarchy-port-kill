@@ -16,6 +16,7 @@ async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
   const bin = path.join(dir, "bin")
   fs.mkdirSync(bin)
+  fs.symlinkSync("/bin/sleep", path.join(bin, "sleep"))
   const log = path.join(dir, "args.log")
   const ipcLog = path.join(dir, "ipc.log")
   if (withShell) fs.writeFileSync(path.join(bin, "omarchy-shell"), [
@@ -55,8 +56,26 @@ async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true
   const run = (...args) => spawnSync("/bin/bash", [script, ...args], { encoding: "utf8", env })
   const calls = () => fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : []
   const ipcCalls = () => fs.existsSync(ipcLog) ? fs.readFileSync(ipcLog, "utf8").trim().split("\n") : []
-  return { run, calls, ipcCalls, monitor: monitorProcess }
+  return { run, calls, ipcCalls, env, bin, monitor: monitorProcess }
 }
+
+test("launch preserves direct console output and logging and locale settings", async t => {
+  const { env, bin } = await fakeEnv(t, { monitor: false })
+  const consolePath = path.join(bin, "port-kill-console")
+  fs.writeFileSync(consolePath, [
+    "#!/bin/bash",
+    'printf "%s\\n" "${RUST_LOG-unset}" "${LC_ALL-unset}" "${LANG-unset}"',
+    'printf "console stderr\\n" >&2'
+  ].join("\n"), { mode: 0o755 })
+  for (const settings of [{}, { RUST_LOG: "info", LC_ALL: "C", LANG: "C" }]) {
+    const options = { encoding: "utf8", env: { ...env, ...settings } }
+    const direct = spawnSync(consolePath, [], options)
+    const wrapped = spawnSync("/bin/bash", [script, "launch"], options)
+    assert.equal(wrapped.status, direct.status)
+    assert.equal(wrapped.stdout, direct.stdout)
+    assert.equal(wrapped.stderr, direct.stderr)
+  }
+})
 
 test("launch notifies the bar at startup and exit, preserving the monitor exit code", async t => {
   const { run, ipcCalls } = await fakeEnv(t, { monitor: false, exitCode: 7 })
@@ -79,6 +98,21 @@ test("list returns Port Kill's JSON records without log lines", async t => {
   const result = run("list")
   assert.equal(result.status, 0, result.stderr)
   assert.equal(result.stdout, '{"pid":42,"port":3000,"name":"node"}\n')
+})
+
+test("list succeeds with empty output or trailing log lines", async t => {
+  const { run, bin } = await fakeEnv(t)
+  const consolePath = path.join(bin, "port-kill-console")
+  for (const [output, expected] of [
+    ["", ""],
+    ["DEBUG: no listeners\n", ""],
+    ['{"pid":42,"port":3000,"name":"node"}\nDEBUG: done\n', '{"pid":42,"port":3000,"name":"node"}\n']
+  ]) {
+    fs.writeFileSync(consolePath, `#!/bin/bash\ncat_output='${output}'\nprintf '%s' "$cat_output"\n`, { mode: 0o755 })
+    const result = run("list")
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(result.stdout, expected)
+  }
 })
 
 test("kill passes one port to Port Kill", async t => {

@@ -2,8 +2,8 @@
 
 # Run Port Kill's console binary for the bar widget. Port Kill does the port
 # scan and the SIGTERM/SIGKILL sequence; this script only finds the binary,
-# checks that a Port Kill monitor is running, and strips log noise from the
-# JSON output.
+# checks for running monitors, filters JSON output, and notifies the bar
+# when the visible console starts or exits.
 #
 #   portkill.sh list
 #   portkill.sh kill <port>
@@ -14,8 +14,6 @@
 # Exit codes: 0 ok, 1 Port Kill failed, 2 usage, 3 Port Kill missing,
 # 4 lsof missing, 5 no Port Kill monitor running.
 
-export LC_ALL=C
-export RUST_LOG=error
 # Port Kill's installer puts its binaries here.
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -48,14 +46,43 @@ monitor_pids() {
   return "$found"
 }
 
+require_backend() {
+  port_kill=${PORT_KILL_CONSOLE:-$(command -v port-kill-console)}
+  [[ -n $port_kill && -x $port_kill ]] || die "Port Kill is not installed" 3
+  command -v lsof >/dev/null || die "Port Kill needs lsof" 4
+}
+
+# Only background commands override logging and locale. The visible console
+# inherits the caller's environment and writes directly to the terminal.
+run_background() {
+  LC_ALL=C RUST_LOG=error "$port_kill" "$@"
+}
+
+notify_bar() {
+  omarchy-shell -q jesusarchive.port-kill.service "$1" >/dev/null 2>&1 || true
+}
+
 action=${1:-}
 case $action in
+  launch)
+    (($# == 1)) || die "Usage: portkill.sh launch"
+    require_backend
+    trap 'notify_bar refresh' EXIT
+    notify_bar started
+    "$port_kill"
+    exit "$?"
+    ;;
   list)
     (($# == 1)) || die "Usage: portkill.sh list"
     monitor_pids >/dev/null || die "Port Kill is not running" 5
-    ;;
-  launch)
-    (($# == 1)) || die "Usage: portkill.sh launch"
+    require_backend
+    output=$(run_background --json 2>/dev/null) || die "Port Kill could not list ports" 1
+    # Port Kill can mix log lines with its JSON records.
+    while IFS= read -r line; do
+      if [[ $line == "{"* ]]; then
+        printf '%s\n' "$line"
+      fi
+    done <<<"$output"
     ;;
   kill)
     (($# == 2)) || die "Usage: portkill.sh kill <port>"
@@ -63,14 +90,17 @@ case $action in
     [[ $port =~ ^[0-9]{1,5}$ ]] || die "Invalid port: $port"
     port=$((10#$port))
     ((port >= 1 && port <= 65535)) || die "Invalid port: $2"
+    require_backend
+    run_background --ports "$port" --kill-all >/dev/null 2>&1 || die "Port Kill could not stop port $port" 1
     ;;
   kill-all)
     (($# == 1)) || die "Usage: portkill.sh kill-all"
+    require_backend
+    run_background --kill-all >/dev/null 2>&1 || die "Port Kill could not stop all processes" 1
     ;;
   quit)
     (($# == 1)) || die "Usage: portkill.sh quit"
-    # SIGTERM, not SIGINT: Port Kill started from a script or in the
-    # background ignores SIGINT, and it has no handler for either signal.
+    # Background monitors may ignore SIGINT; use SIGTERM instead.
     pids=$(monitor_pids) || exit 0
     while IFS= read -r pid; do
       kill -TERM "$pid" 2>/dev/null
@@ -78,40 +108,11 @@ case $action in
     # Wait for the monitors to exit so the widget's next refresh hides it.
     for _ in {1..20}; do
       monitor_pids >/dev/null || exit 0
-      read -rt 0.1 <> <(:) || true
+      sleep 0.1
     done
     die "Port Kill did not stop" 1
     ;;
   *)
     die "Unknown action: $action"
-    ;;
-esac
-
-port_kill=${PORT_KILL_CONSOLE:-$(command -v port-kill-console)}
-[[ -n $port_kill && -x $port_kill ]] || die "Port Kill is not installed" 3
-command -v lsof >/dev/null || die "Port Kill needs lsof" 4
-
-case $action in
-  launch)
-    notify_bar() {
-      omarchy-shell -q jesusarchive.port-kill.service "$1" >/dev/null 2>&1 || true
-    }
-    trap 'notify_bar refresh' EXIT
-    notify_bar started
-    "$port_kill"
-    exit "$?"
-    ;;
-  list)
-    output=$("$port_kill" --json 2>/dev/null) || die "Port Kill could not list ports" 1
-    # Port Kill prints a DEBUG line to stdout before the JSON records.
-    while IFS= read -r line; do
-      [[ $line == "{"* ]] && printf '%s\n' "$line"
-    done <<<"$output"
-    ;;
-  kill)
-    "$port_kill" --ports "$port" --kill-all >/dev/null 2>&1 || die "Port Kill could not stop port $port" 1
-    ;;
-  kill-all)
-    "$port_kill" --kill-all >/dev/null 2>&1 || die "Port Kill could not stop all processes" 1
     ;;
 esac

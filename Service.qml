@@ -42,9 +42,9 @@ Item {
     return decodeURIComponent(String(Qt.resolvedUrl(file)).replace(/^file:\/\//, ""))
   }
 
-  function refresh() {
+  function refresh(queueIfBusy) {
     if (scanProcess.running) {
-      refreshPending = true
+      if (queueIfBusy !== false) refreshPending = true
       return
     }
     refreshPending = false
@@ -69,6 +69,7 @@ Item {
   }
 
   function applyFailure(exitCode, stderr) {
+    if (exitCode !== 5) startupChecks = 0
     status = exitCode === 5 ? "stopped"
       : exitCode === 3 ? "missing"
       : exitCode === 4 ? "no-lsof"
@@ -80,21 +81,20 @@ Item {
   }
 
   function kill(row) {
-    if (!row || killProcess.running) return
+    if (!row) return
     startKill(["bash", portKillScript, "kill", String(row.port)])
   }
 
   function killAll() {
-    if (killProcess.running) return
     startKill(["bash", portKillScript, "kill-all"])
   }
 
   function quit() {
-    if (killProcess.running) return
     startKill(["bash", portKillScript, "quit"])
   }
 
   function startKill(command) {
+    if (killProcess.running) return
     _killError = ""
     actionError = ""
     killProcess.command = command
@@ -125,7 +125,7 @@ Item {
     running: root.startupChecks > 0
     onTriggered: {
       root.startupChecks--
-      root.refresh()
+      root.refresh(false)
     }
   }
 
@@ -134,7 +134,7 @@ Item {
     repeat: true
     running: true
     triggeredOnStart: true
-    onTriggered: root.refresh()
+    onTriggered: root.refresh(false)
   }
 
   Process {

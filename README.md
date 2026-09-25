@@ -29,7 +29,7 @@ them; the plugin adds a bar icon and menu while its monitor is running.
 omarchy plugin add https://github.com/jesusarchive/omarchy-port-kill.git --enable
 ```
 
-To also add Port Kill to the app launcher:
+Add Port Kill to the app launcher:
 
 ```bash
 omarchy tui install "Port Kill" "bash $HOME/.config/omarchy/plugins/jesusarchive.port-kill/portkill.sh launch" float \
@@ -42,9 +42,8 @@ Select Port Kill in the app launcher. Its launch script notifies the bar at
 startup and exit, so the icon updates without waiting for the next regular check.
 If you already have a launcher, run the command above again to update it.
 
-You can also run `port-kill-console` directly in a terminal; the bar detects it
-within the refresh interval of two seconds by default. Left-click the icon to
-open the menu; right-click to refresh.
+You can also run `port-kill-console` in a terminal. Click the bar icon to open
+the menu.
 
 ![Port Kill menu](assets/menu.png)
 
@@ -89,7 +88,7 @@ Change settings in the bar editor or from a terminal:
 
 | Setting | Key | Default | Description |
 | --- | --- | --- | --- |
-| Refresh interval | `refreshIntervalSec` | `2` seconds | How often the bar refreshes the process list while Port Kill is running. Accepts 1 to 300 seconds. |
+| Refresh interval | `refreshIntervalSec` | `2` seconds | How often the bar checks for the monitor and refreshes its process list. Accepts 1 to 300 seconds. |
 
 ```bash
 omarchy bar set jesusarchive.port-kill refreshIntervalSec 2 --json
@@ -109,7 +108,9 @@ omarchy plugin update jesusarchive.port-kill
 omarchy plugin remove jesusarchive.port-kill
 ```
 
-Port Kill and its launcher entry remain installed. To remove them too:
+Port Kill and its launcher entry remain installed. The launcher uses the
+plugin's script, so remove the entry too or recreate it with `port-kill-console`
+as its command. To remove both the launcher and Port Kill:
 
 ```bash
 omarchy tui remove "Port Kill"
