@@ -1,12 +1,13 @@
 # Port Kill for Omarchy
 
 View and stop development processes from the Omarchy bar with
-[Port Kill](https://portkill.com/) ([GitHub](https://github.com/treadiehq/port-kill)).
+[Port Kill](https://portkill.com/).
 
 ![Port Kill menu and terminal](preview.png)
 
-This is an independent integration. Port Kill scans for processes and stops
-them; the plugin adds a bar icon and menu while its monitor is running.
+This is an independent integration of [Port Kill](https://github.com/treadiehq/port-kill).
+Port Kill scans for processes and stops them; the plugin adds a bar icon and
+menu while its monitor is running.
 
 ## Requirements
 
