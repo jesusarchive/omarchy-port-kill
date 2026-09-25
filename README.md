@@ -1,19 +1,18 @@
 # Port Kill for Omarchy
 
-View and stop development processes from the Omarchy bar with
+Find and free development ports from the Omarchy bar with
 [Port Kill](https://portkill.com/).
 
 ![Port Kill menu and terminal](preview.png)
 
 This is an independent integration of [Port Kill](https://github.com/treadiehq/port-kill).
-Port Kill scans for processes and stops them; the plugin adds a bar icon and
-menu while its monitor is running.
+The plugin uses `port-kill-console` to list and stop processes, with a bar icon
+and menu while the console monitor is running.
 
 ## Requirements
 
 - [Omarchy Quattro](https://omarchy.org/).
-- Port Kill. Follow its [installation instructions](https://github.com/treadiehq/port-kill#install).
-
+- Port Kill's `port-kill-console` binary. Follow its [installation instructions](https://github.com/treadiehq/port-kill#install).
 - `lsof`, which Port Kill uses to find listening processes. Install it separately:
 
   ```bash
@@ -46,6 +45,7 @@ Either command replaces an existing Port Kill launcher entry.
 
 Select Port Kill in the app launcher or run `port-kill-console` in a terminal.
 Click the bar icon to open the menu.
+The bar uses Port Kill's default range of ports 2000 through 9000.
 
 ![Port Kill menu](assets/menu.png)
 
