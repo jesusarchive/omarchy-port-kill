@@ -1,13 +1,14 @@
-# Port Killer for Omarchy
+# Port Kill for Omarchy
 
-![Port Killer's bar menu next to Port Kill running in a terminal](preview.png)
+![Port Kill's bar menu next to Port Kill running in a terminal](preview.png)
 
 View and stop development processes from the Omarchy bar with
 [Port Kill](https://portkill.com/). Start `port-kill-console` in a terminal
 or from the app launcher to show the icon. The menu lists its processes on
 ports 2000 through 9000 and lets you stop one port or all of them.
 
-Port Kill handles scanning and stopping processes. This plugin adds the bar
+This is an independent integration. Port Kill handles scanning and stopping
+processes. This plugin adds the bar
 icon and menu; it does not install or start Port Kill for you.
 
 ## Requirements
@@ -36,7 +37,7 @@ omarchy tui install "Port Kill" port-kill-console float \
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/jesusarchive/omarchy-port-killer.git --enable
+omarchy plugin add https://github.com/jesusarchive/omarchy-port-kill.git --enable
 ```
 
 After `omarchy plugin update`, run `omarchy restart shell` so the shell loads
@@ -50,7 +51,7 @@ the terminal prints Port Kill's port status as it changes. Choose `Quit` in the
 menu, close the terminal, or press Ctrl+C to stop Port Kill; the icon
 disappears with it.
 
-![The Port Killer menu with three development ports](assets/menu.png)
+![The Port Kill menu with three development ports](assets/menu.png)
 
 The icon follows Port Kill's status icon. The center is green when nothing is
 running, orange for 1 to 9 processes, and red for 10 or more. It turns grey
@@ -87,7 +88,7 @@ The terminal logs changes made from the menu:
 To open the menu from a keybinding, toggle it over the shell's IPC:
 
 ```bash
-qs -p /usr/share/omarchy/shell ipc call jesusarchive.port-killer toggle
+qs -p /usr/share/omarchy/shell ipc call jesusarchive.port-kill toggle
 ```
 
 The only setting is `refreshIntervalSec`, which defaults to two seconds, the
@@ -96,8 +97,8 @@ same interval as Port Kill's own monitor.
 ## Disable or remove
 
 ```bash
-omarchy plugin disable jesusarchive.port-killer
-omarchy plugin remove jesusarchive.port-killer
+omarchy plugin disable jesusarchive.port-kill
+omarchy plugin remove jesusarchive.port-kill
 ```
 
 Removing the plugin leaves Port Kill installed. To remove Port Kill and its

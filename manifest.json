@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "jesusarchive.port-killer",
-  "name": "Port Killer",
+  "id": "jesusarchive.port-kill",
+  "name": "Port Kill",
   "version": "0.3.0",
   "author": "jesusarchive",
   "license": "MIT",
@@ -11,7 +11,7 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "Port Killer",
+    "displayName": "Port Kill",
     "description": "Stop processes on one port or across ports 2000–9000. Requires a running Port Kill monitor and lsof.",
     "category": "System",
     "aliases": ["ports", "port-kill", "kill-port"],

@@ -7,8 +7,8 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "jesusarchive.port-killer"
-  ipcTarget: "jesusarchive.port-killer"
+  moduleName: "jesusarchive.port-kill"
+  ipcTarget: "jesusarchive.port-kill"
 
   property int cursorIndex: 0
 
