@@ -17,6 +17,7 @@ async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true
   const bin = path.join(dir, "bin")
   fs.mkdirSync(bin)
   fs.symlinkSync("/bin/sleep", path.join(bin, "sleep"))
+  fs.symlinkSync(spawnSync("which", ["python3"], { encoding: "utf8" }).stdout.trim(), path.join(bin, "python3"))
   const log = path.join(dir, "args.log")
   const ipcLog = path.join(dir, "ipc.log")
   if (withShell) fs.writeFileSync(path.join(bin, "omarchy-shell"), [
@@ -149,6 +150,46 @@ test("quit stops the running monitor before returning", async t => {
   const [code] = await exited
   assert.equal(code, 143)
   assert.equal(run("list").status, 5)
+})
+
+test("quit leaves unrelated processes and one-shot commands running", async t => {
+  const { run, env } = await fakeEnv(t, { monitor: false })
+  for (const args of [[], ["--json"], ["--kill-all"]]) {
+    const child = spawn(process.execPath, ["-e", [
+      `process.title = ${JSON.stringify(args.length ? "port-kill-console " + args[0] : "unrelated")}`,
+      "process.on('SIGTERM', () => process.exit(143))",
+      "process.on('SIGUSR1', () => console.log('alive'))",
+      "console.log('ready')",
+      "setInterval(() => {}, 1000)"
+    ].join(";")], { stdio: ["ignore", "pipe", "ignore"] })
+    t.after(() => child.kill("SIGKILL"))
+    await once(child.stdout, "data")
+    const dir = path.join(env.PORT_KILL_PROC_ROOT, String(child.pid))
+    fs.mkdirSync(dir)
+    fs.writeFileSync(path.join(dir, "comm"), args.length ? "port-kill-conso\n" : "unrelated\n")
+    fs.writeFileSync(path.join(dir, "cmdline"), ["port-kill-console", ...args, ""].join("\0"))
+    const result = run("quit")
+    assert.equal(result.status, 0, result.stderr)
+    // Require a response from the child after Quit, not stale exit fields.
+    const alive = once(child.stdout, "data", { signal: AbortSignal.timeout(2000) })
+    child.kill("SIGUSR1")
+    assert.equal(String((await alive)[0]).trim(), "alive")
+  }
+})
+
+test("quit succeeds when no monitors exist", async t => {
+  const { run } = await fakeEnv(t, { monitor: false })
+  assert.equal(run("quit").status, 0)
+})
+
+test("quit finds its helper when invoked without a directory", async t => {
+  const { env, monitor } = await fakeEnv(t)
+  const exited = once(monitor, "exit")
+  const result = spawnSync("/bin/bash", ["portkill.sh", "quit"], {
+    cwd: path.dirname(script), env, encoding: "utf8"
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal((await exited)[0], 143)
 })
 
 test("missing Port Kill and missing lsof have their own exit codes", async t => {

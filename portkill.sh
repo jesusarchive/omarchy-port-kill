@@ -100,17 +100,10 @@ case $action in
     ;;
   quit)
     (($# == 1)) || die "Usage: portkill.sh quit"
-    # Background monitors may ignore SIGINT; use SIGTERM instead.
-    pids=$(monitor_pids) || exit 0
-    while IFS= read -r pid; do
-      kill -TERM "$pid" 2>/dev/null
-    done <<<"$pids"
-    # Wait for the monitors to exit so the widget's next refresh hides it.
-    for _ in {1..20}; do
-      monitor_pids >/dev/null || exit 0
-      sleep 0.1
-    done
-    die "Port Kill did not stop" 1
+    command -v python3 >/dev/null || die "Port Kill needs Python 3 to stop monitors safely" 3
+    script_dir=.
+    [[ ${BASH_SOURCE[0]} == */* ]] && script_dir=${BASH_SOURCE[0]%/*}
+    exec python3 "$script_dir/quit-monitors.py"
     ;;
   *)
     die "Unknown action: $action"

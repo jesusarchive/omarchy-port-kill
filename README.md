@@ -13,6 +13,7 @@ and menu while the console monitor is running.
 
 - [Omarchy Quattro](https://omarchy.org/).
 - Port Kill, installed using its [official installer](https://github.com/treadiehq/port-kill#install).
+- Python 3.9 or newer with Linux pidfd support, used to stop monitors safely.
 - `lsof`, which Port Kill uses to find listening processes. Install it separately:
 
   ```bash
@@ -125,6 +126,7 @@ Run from the repository root with Node.js installed:
 
 ```bash
 node --test tests/*.test.js
+python3 -m unittest discover -s tests -p 'test_*.py'
 omarchy plugin validate .
 ```
 
