@@ -2,47 +2,57 @@ const test = require("node:test")
 const assert = require("node:assert/strict")
 const M = require("../Model.js")
 
-const scan = [
-  "S\tLISTEN 0 511 0.0.0.0:5173 0.0.0.0:* users:((\"node\",pid=4242,fd=20))",
-  "S\tLISTEN 0 511 [::]:5173 [::]:* users:((\"node\",pid=4242,fd=21))",
-  "S\tLISTEN 0 511 127.0.0.1:5174 0.0.0.0:* users:((\"node\",pid=4242,fd=22))",
-  "S\tLISTEN 0 128 0.0.0.0:8000 0.0.0.0:* users:((\"gunicorn\",pid=500,fd=5),(\"gunicorn\",pid=501,fd=5))",
-  "S\tLISTEN 0 4096 127.0.0.1:631 0.0.0.0:*",
-  "S\tudp UNCONN 0 0 0.0.0.0:5353 0.0.0.0:* users:((\"avahi\",pid=700,fd=7))",
-  "P\t4242\t111111\t1000",
-  "P\t500\t222222\t1000",
-  "P\t501\t333333\t1000",
-  "P\t700\t444444\t1000",
+const record = fields => JSON.stringify(Object.assign({
+  pid: 1,
+  port: 3000,
+  command: "node",
+  name: "node",
+  container_id: null,
+  container_name: null,
+  command_line: null,
+  working_directory: null,
+  process_group: null,
+  project_name: null
+}, fields))
+
+const output = [
+  "DEBUG: Creating ProcessMonitor with verbose=false, performance=false",
+  record({ pid: 4242, port: 5174, name: "node" }),
+  record({ pid: 4242, port: 5173, name: "node" }),
+  record({ pid: 500, port: 8000, name: "gunicorn", process_group: "Python" }),
+  record({ pid: 900, port: 5432, name: "docker-proxy", container_name: "db" }),
+  "{not json",
   ""
 ].join("\n")
 
-test("splitAddress handles IPv4, IPv6, and invalid ports", () => {
-  assert.deepEqual(M.splitAddress("127.0.0.1:5173"), { addr: "127.0.0.1", port: 5173 })
-  assert.deepEqual(M.splitAddress("[::1]:631"), { addr: "::1", port: 631 })
-  assert.equal(M.splitAddress("*:*"), null)
+test("parsePortKill skips log lines and sorts rows by port", () => {
+  const rows = M.parsePortKill(output)
+  assert.deepEqual(rows.map(row => row.port), [5173, 5174, 5432, 8000])
+  assert.equal(rows[0].pid, 4242)
 })
 
-test("parseSsLine extracts sorted unique process ids", () => {
-  const socket = M.parseSsLine("LISTEN 0 5 0.0.0.0:8000 0.0.0.0:* users:((\"app\",pid=12,fd=3),(\"app\",pid=9,fd=4),(\"app\",pid=12,fd=5))")
-  assert.equal(socket.proto, "tcp")
-  assert.equal(socket.port, 8000)
-  assert.deepEqual(socket.pids, [9, 12])
+test("parsePortKill drops duplicate and incomplete records", () => {
+  const rows = M.parsePortKill([
+    record({ pid: 7, port: 3000 }),
+    record({ pid: 7, port: 3000 }),
+    JSON.stringify({ pid: 8 })
+  ].join("\n"))
+  assert.equal(rows.length, 1)
 })
 
-test("parseScan keeps owned TCP rows and merges IPv4 and IPv6 twins", () => {
-  const rows = M.parseScan(scan)
-  assert.deepEqual(rows.map(row => row.port), [5173, 5174, 8000])
-  assert.equal(rows.filter(row => row.port === 5173).length, 1)
-  assert.equal(rows.find(row => row.port === 8000).targets.length, 2)
-})
-
-test("menu labels stay compact", () => {
-  const rows = M.parseScan(scan)
-  assert.equal(M.processLabel(rows[0]), "node")
+test("menu labels match Port Kill's tray menu", () => {
+  const rows = M.parsePortKill(output)
   assert.equal(M.menuLabel(rows[0]), "Kill: Port 5173: node")
-  assert.equal(M.processLabel(rows[2]), "gunicorn")
+  assert.equal(M.menuLabel(rows[2]), "Kill: Port 5432: docker-proxy [Docker: db]")
 })
 
 test("processCount deduplicates one process listening on several ports", () => {
-  assert.equal(M.processCount(M.parseScan(scan)), 3)
+  assert.equal(M.processCount(M.parsePortKill(output)), 3)
+})
+
+test("statusColor follows Port Kill's icon levels", () => {
+  assert.equal(M.statusColor(0), "#00ff00")
+  assert.equal(M.statusColor(1), "#ffa500")
+  assert.equal(M.statusColor(9), "#ffa500")
+  assert.equal(M.statusColor(10), "#ff0000")
 })

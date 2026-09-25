@@ -8,13 +8,19 @@ import "Model.js" as Model
 Panel {
   id: root
   moduleName: "jesusarchive.port-killer"
+  ipcTarget: "jesusarchive.port-killer"
 
   property int cursorIndex: 0
 
   readonly property int processCount: Model.processCount(ports.rows)
   readonly property int itemCount: ports.rows.length + 1
+  readonly property bool needsSetup: ports.status === "missing" || ports.status === "no-lsof"
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+  // The menu clips its rows; keep them 1px inside so the cursor border on the
+  // edge rows isn't clipped at fractional display scales.
+  readonly property int edgeInset: 1
+  readonly property real menuHeight: menuColumn.implicitHeight + edgeInset * 2
   readonly property real menuWidth: Math.max(
     Style.space(270),
     Math.min(Style.space(380), menuWidthMetrics.advanceWidth + Style.space(38))
@@ -69,6 +75,7 @@ Panel {
   }
 
   function killAll() {
+    if (!ports.ready) return
     if (!ports.busy) ports.killAll()
     close()
   }
@@ -78,6 +85,9 @@ Panel {
     else kill(selectedRow())
   }
 
+  // Like Port Kill's macOS status item, the widget only shows while Port Kill
+  // runs.
+  visible: ports.running
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -87,6 +97,7 @@ Panel {
     ports.refresh()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
+  onVisibleChanged: if (!visible && opened) close()
   onItemCountChanged: cursorIndex = Math.max(0, Math.min(cursorIndex, Math.max(0, itemCount - 1)))
 
   Service {
@@ -118,13 +129,14 @@ Panel {
             anchors.centerIn: parent
             width: Math.round(parent.width * 0.32)
             height: width
-            color: root.processCount > 0 ? "#ff0000" : "#00ff00"
+            color: root.needsSetup ? "#808080" : Model.statusColor(root.processCount)
           }
         }
       }
     }
-    tooltipText: root.processCount === 0
-      ? "No development processes running"
+    tooltipText: ports.status === "missing" ? "Port Kill is not installed"
+      : ports.status === "no-lsof" ? "Port Kill needs lsof"
+      : root.processCount === 0 ? "No development processes running"
       : root.processCount + " development process(es) running"
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.RightButton) ports.refresh()
@@ -141,7 +153,7 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(root.menuWidth)
-    contentHeight: panel.fittedContentHeight(menuColumn.implicitHeight, Style.space(560))
+    contentHeight: panel.fittedContentHeight(root.menuHeight, Style.space(560))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -163,7 +175,7 @@ Panel {
         id: menuFlick
         anchors.fill: parent
         contentWidth: width
-        contentHeight: menuColumn.implicitHeight
+        contentHeight: root.menuHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
@@ -172,7 +184,9 @@ Panel {
 
         Column {
           id: menuColumn
-          width: menuFlick.width
+          x: root.edgeInset
+          y: root.edgeInset
+          width: menuFlick.width - root.edgeInset * 2
           spacing: Style.space(4)
 
           MenuEntry {
@@ -180,10 +194,12 @@ Panel {
             width: parent.width
             label: "Kill All Processes"
             navIndex: 0
+            enabled: ports.ready
             onTriggered: root.killAll()
           }
 
           PanelSeparator {
+            visible: ports.ready
             width: parent.width
             foreground: root.foreground
           }
