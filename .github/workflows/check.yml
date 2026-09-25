@@ -13,6 +13,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --test tests/
+      - run: node --test tests/*.test.js
       - run: bash -n portkill.sh
       - run: python3 -m json.tool manifest.json > /dev/null

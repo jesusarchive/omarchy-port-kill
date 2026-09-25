@@ -111,7 +111,7 @@ rm ~/.local/bin/port-kill ~/.local/bin/port-kill-console
 ## Development
 
 ```bash
-node --test tests/
+node --test tests/*.test.js
 omarchy plugin validate .
 ```
 
@@ -124,7 +124,7 @@ The default tests use fake binaries and isolated monitor discovery. To test
 with installed copies of Port Kill and `lsof`, run:
 
 ```bash
-PORT_KILL_INTEGRATION=1 node --test tests/
+PORT_KILL_INTEGRATION=1 node --test tests/*.test.js
 ```
 
 The integration test starts its own monitor and listener on an available port
