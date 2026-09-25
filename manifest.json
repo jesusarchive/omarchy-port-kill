@@ -5,7 +5,7 @@
   "version": "0.3.0",
   "author": "jesusarchive",
   "license": "MIT",
-  "description": "View and stop development processes from the Omarchy bar with Port Kill.",
+  "description": "View and stop processes using development ports from the Omarchy bar.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,12 +14,13 @@
   },
   "barWidget": {
     "displayName": "Port Kill",
-    "description": "Shows running development processes. Open the menu to stop one port or all ports from 2000 through 9000.",
+    "description": "Lists processes using development ports. Stop processes on one port or all monitored ports.",
     "category": "System",
     "aliases": [
       "ports",
       "port-kill",
-      "kill-port"
+      "kill-port",
+      "port-killer"
     ],
     "allowMultiple": false,
     "defaultSection": "right",
