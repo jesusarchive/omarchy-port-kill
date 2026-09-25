@@ -24,6 +24,8 @@ Item {
   property string _signature: ""
   property string scanError: ""
   property string actionError: ""
+  property int startupChecks: 0
+  property bool refreshPending: false
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -41,7 +43,11 @@ Item {
   }
 
   function refresh() {
-    if (scanProcess.running) return
+    if (scanProcess.running) {
+      refreshPending = true
+      return
+    }
+    refreshPending = false
     _scanOutput = ""
     _scanError = ""
     scanProcess.command = ["bash", portKillScript, "list"]
@@ -59,6 +65,7 @@ Item {
     }
     scanError = ""
     status = "ready"
+    startupChecks = 0
   }
 
   function applyFailure(exitCode, stderr) {
@@ -101,6 +108,27 @@ Item {
 
   onSettingsChanged: refresh()
 
+  IpcHandler {
+    target: "jesusarchive.port-kill.service"
+    function started(): void {
+      // The launcher calls before starting the foreground monitor. Retry only
+      // during startup so a scan cannot miss the new process and wait 2s.
+      root.startupChecks = 20
+      root.refresh()
+    }
+    function refresh(): void { root.refresh() }
+  }
+
+  Timer {
+    interval: 100
+    repeat: true
+    running: root.startupChecks > 0
+    onTriggered: {
+      root.startupChecks--
+      root.refresh()
+    }
+  }
+
   Timer {
     interval: root.refreshIntervalSec * 1000
     repeat: true
@@ -128,6 +156,7 @@ Item {
       var stderr = String(scanStderr.text || root._scanError || "")
       if (exitCode === 0) root.applyScan(stdout)
       else root.applyFailure(exitCode, stderr)
+      if (root.refreshPending) Qt.callLater(root.refresh)
     }
   }
 

@@ -11,12 +11,17 @@ const script = path.resolve(__dirname, "..", "portkill.sh")
 
 // A fake Port Kill that logs its arguments and prints a DEBUG line before one
 // JSON record, like the real binary.
-async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true } = {}) {
+async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true, exitCode = 0, withShell = true } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "portkill-test-"))
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
   const bin = path.join(dir, "bin")
   fs.mkdirSync(bin)
   const log = path.join(dir, "args.log")
+  const ipcLog = path.join(dir, "ipc.log")
+  if (withShell) fs.writeFileSync(path.join(bin, "omarchy-shell"), [
+    "#!/bin/bash",
+    `printf '%s\\n' "$*" >> '${ipcLog}'`
+  ].join("\n"), { mode: 0o755 })
   const proc = path.join(dir, "proc")
   fs.mkdirSync(proc)
 
@@ -26,7 +31,7 @@ async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true
       `printf '%s\\n' "$*" >> '${log}'`,
       "echo 'DEBUG: Creating ProcessMonitor'",
       `[[ $1 == --json ]] && echo '{"pid":42,"port":3000,"name":"node"}'`,
-      "exit 0"
+      `exit ${exitCode}`
     ].join("\n"), { mode: 0o755 })
   }
   if (withLsof) fs.writeFileSync(path.join(bin, "lsof"), "#!/bin/bash\n", { mode: 0o755 })
@@ -49,8 +54,25 @@ async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true
   const env = { PATH: bin, HOME: dir, PORT_KILL_PROC_ROOT: proc }
   const run = (...args) => spawnSync("/bin/bash", [script, ...args], { encoding: "utf8", env })
   const calls = () => fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : []
-  return { run, calls, monitor: monitorProcess }
+  const ipcCalls = () => fs.existsSync(ipcLog) ? fs.readFileSync(ipcLog, "utf8").trim().split("\n") : []
+  return { run, calls, ipcCalls, monitor: monitorProcess }
 }
+
+test("launch notifies the bar at startup and exit, preserving the monitor exit code", async t => {
+  const { run, ipcCalls } = await fakeEnv(t, { monitor: false, exitCode: 7 })
+  assert.equal(run("launch").status, 7)
+  assert.deepEqual(ipcCalls(), [
+    "-q jesusarchive.port-kill.service started",
+    "-q jesusarchive.port-kill.service refresh"
+  ])
+})
+
+test("launch still runs without the Omarchy shell command", async t => {
+  const { run } = await fakeEnv(t, { monitor: false, withShell: false })
+  const result = run("launch")
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /Creating ProcessMonitor/)
+})
 
 test("list returns Port Kill's JSON records without log lines", async t => {
   const { run } = await fakeEnv(t)
@@ -142,7 +164,7 @@ test("leading zero ports are passed as decimal", async t => {
 
 test("usage errors never call the backend", async t => {
   const { run, calls } = await fakeEnv(t)
-  for (const args of [[], ["unknown"], ["list", "extra"], ["kill"], ["quit", "extra"], ["kill-all", "extra"]]) {
+  for (const args of [[], ["unknown"], ["list", "extra"], ["kill"], ["quit", "extra"], ["kill-all", "extra"], ["launch", "extra"]]) {
     assert.equal(run(...args).status, 2)
   }
   assert.deepEqual(calls(), [])

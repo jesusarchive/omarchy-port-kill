@@ -9,6 +9,7 @@
 #   portkill.sh kill <port>
 #   portkill.sh kill-all
 #   portkill.sh quit
+#   portkill.sh launch
 #
 # Exit codes: 0 ok, 1 Port Kill failed, 2 usage, 3 Port Kill missing,
 # 4 lsof missing, 5 no Port Kill monitor running.
@@ -53,6 +54,9 @@ case $action in
     (($# == 1)) || die "Usage: portkill.sh list"
     monitor_pids >/dev/null || die "Port Kill is not running" 5
     ;;
+  launch)
+    (($# == 1)) || die "Usage: portkill.sh launch"
+    ;;
   kill)
     (($# == 2)) || die "Usage: portkill.sh kill <port>"
     port=$2
@@ -88,6 +92,15 @@ port_kill=${PORT_KILL_CONSOLE:-$(command -v port-kill-console)}
 command -v lsof >/dev/null || die "Port Kill needs lsof" 4
 
 case $action in
+  launch)
+    notify_bar() {
+      omarchy-shell -q jesusarchive.port-kill.service "$1" >/dev/null 2>&1 || true
+    }
+    trap 'notify_bar refresh' EXIT
+    notify_bar started
+    "$port_kill"
+    exit "$?"
+    ;;
   list)
     output=$("$port_kill" --json 2>/dev/null) || die "Port Kill could not list ports" 1
     # Port Kill prints a DEBUG line to stdout before the JSON records.
