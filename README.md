@@ -10,7 +10,7 @@ them; the plugin adds a bar icon and menu while its monitor is running.
 
 ## Requirements
 
-- Omarchy with the shell plugin system.
+- [Omarchy Quattro](https://omarchy.org/).
 - Port Kill, installed with its official installer:
 
   ```bash
