@@ -5,23 +5,39 @@
   "version": "0.3.0",
   "author": "jesusarchive",
   "license": "MIT",
-  "description": "View and stop development processes from the bar while Port Kill is running.",
-  "kinds": ["bar-widget"],
+  "description": "View and stop development processes from the Omarchy bar with Port Kill.",
+  "kinds": [
+    "bar-widget"
+  ],
   "entryPoints": {
     "barWidget": "Panel.qml"
   },
   "barWidget": {
     "displayName": "Port Kill",
-    "description": "Stop processes on one port or across ports 2000–9000. Requires a running Port Kill monitor and lsof.",
+    "description": "Shows running development processes. Open the menu to stop one port or all ports from 2000 through 9000.",
     "category": "System",
-    "aliases": ["ports", "port-kill", "kill-port"],
+    "aliases": [
+      "ports",
+      "port-kill",
+      "kill-port"
+    ],
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
       "refreshIntervalSec": 2
     },
     "schema": [
-      { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (seconds)", "min": 1, "max": 300, "step": 1, "defaultValue": 2 }
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 1,
+        "max": 300,
+        "step": 1,
+        "defaultValue": 2,
+        "description": "How often the bar checks for a running Port Kill monitor and refreshes the process list. Does not change the terminal monitor interval."
+      }
     ]
-  }
+  },
+  "homepage": "https://github.com/jesusarchive/omarchy-port-kill"
 }

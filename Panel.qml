@@ -13,7 +13,7 @@ Panel {
   property int cursorIndex: 0
 
   readonly property int processCount: Model.processCount(ports.rows)
-  // Kill All, one row per port, then Quit.
+  // Kill All, one row per port/PID pair, then Quit.
   readonly property int itemCount: ports.rows.length + 2
   readonly property int quitIndex: itemCount - 1
   readonly property bool hasError: !ports.ready || ports.actionError !== ""
