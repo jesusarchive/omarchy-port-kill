@@ -13,26 +13,18 @@ menu it has on macOS, built from Omarchy shell components.
 ## Requirements
 
 - Omarchy with the shell plugin system.
-- [Port Kill](https://github.com/treadiehq/port-kill)'s console binary,
-  `port-kill-console`, in `~/.local/bin` or on your `PATH`.
-- `lsof`, which Port Kill uses to find listening processes.
+- [Port Kill](https://portkill.com/), installed with its official installer:
 
-Install `lsof`:
+  ```bash
+  curl -fsSL https://portkill.com/install | bash
+  ```
 
-```bash
-omarchy pkg add lsof
-```
+- `lsof`, which Port Kill uses to find listening processes. Omarchy doesn't
+  include it, and Port Kill's installer doesn't install it:
 
-Install Port Kill's console binary from its latest release:
-
-```bash
-mkdir -p ~/.local/bin
-curl -fL -o ~/.local/bin/port-kill-console \
-  https://github.com/treadiehq/port-kill/releases/latest/download/port-kill-console-linux
-chmod +x ~/.local/bin/port-kill-console
-```
-
-Port Kill publishes Linux binaries for x86_64 only.
+  ```bash
+  sudo pacman -S lsof
+  ```
 
 Optionally, add Port Kill to the app launcher (Super + Space):
 
@@ -45,13 +37,6 @@ omarchy tui install "Port Kill" port-kill-console float \
 
 ```bash
 omarchy plugin add https://github.com/jesusarchive/omarchy-port-killer.git --enable
-```
-
-The widget sits in the right section of the bar, next to the system tray, and
-stays hidden until Port Kill runs. Move it with:
-
-```bash
-omarchy bar move jesusarchive.port-killer --section <left|center|right>
 ```
 
 After `omarchy plugin update`, run `omarchy-restart-shell` so the shell loads
@@ -103,7 +88,7 @@ launcher entry:
 
 ```bash
 omarchy tui remove "Port Kill"
-rm ~/.local/bin/port-kill-console
+rm ~/.local/bin/port-kill ~/.local/bin/port-kill-console
 ```
 
 ## Development
