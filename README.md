@@ -65,6 +65,8 @@ the terminal prints Port Kill's port status as it changes. Choose `Quit` in the
 menu, close the terminal, or press Ctrl+C to stop Port Kill; the icon
 disappears with it.
 
+![Port Kill's terminal log picking up a kill from the bar](assets/terminal.png)
+
 ![The Port Killer menu with three development ports](assets/menu.png)
 
 The icon follows Port Kill's status icon. The center is green when nothing is
