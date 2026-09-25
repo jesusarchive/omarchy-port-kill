@@ -12,11 +12,7 @@ menu while its monitor is running.
 ## Requirements
 
 - [Omarchy Quattro](https://omarchy.org/).
-- Port Kill, installed with its official installer:
-
-  ```bash
-  curl -fsSL https://portkill.com/install | bash
-  ```
+- Port Kill. Follow its [installation instructions](https://github.com/treadiehq/port-kill#installation).
 
 - `lsof`, which Port Kill uses to find listening processes. Install it separately:
 
