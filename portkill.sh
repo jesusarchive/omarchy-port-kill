@@ -29,17 +29,19 @@ die() {
 monitor_pids() {
   local dir comm arg found=1
   local -a argv
-  for dir in /proc/[0-9]*; do
-    IFS= read -r comm <"$dir/comm" 2>/dev/null || continue
+  # Tests supply a private proc directory containing only their own monitor.
+  for dir in "${PORT_KILL_PROC_ROOT:-/proc}"/[0-9]*; do
+    [[ -O $dir ]] || continue
+    IFS= read -r comm 2>/dev/null <"$dir/comm" || continue
     # The kernel truncates comm to 15 characters.
     [[ $comm == port-kill || $comm == port-kill-conso ]] || continue
-    mapfile -d '' -t argv <"$dir/cmdline" 2>/dev/null || continue
+    mapfile -d '' -t argv 2>/dev/null <"$dir/cmdline" || continue
     # Exited processes that haven't been reaped yet have an empty cmdline.
     ((${#argv[@]} > 0)) || continue
     for arg in "${argv[@]:1}"; do
       [[ $arg == --json || $arg == --kill-all ]] && continue 2
     done
-    printf '%s\n' "${dir#/proc/}"
+    printf '%s\n' "${dir##*/}"
     found=0
   done
   return "$found"
@@ -54,7 +56,9 @@ case $action in
   kill)
     (($# == 2)) || die "Usage: portkill.sh kill <port>"
     port=$2
-    [[ $port =~ ^[0-9]+$ ]] && ((port >= 1 && port <= 65535)) || die "Invalid port: $port"
+    [[ $port =~ ^[0-9]{1,5}$ ]] || die "Invalid port: $port"
+    port=$((10#$port))
+    ((port >= 1 && port <= 65535)) || die "Invalid port: $2"
     ;;
   kill-all)
     (($# == 1)) || die "Usage: portkill.sh kill-all"
@@ -70,7 +74,7 @@ case $action in
     # Wait for the monitors to exit so the widget's next refresh hides it.
     for _ in {1..20}; do
       monitor_pids >/dev/null || exit 0
-      read -rt 0.1 <> <(:)
+      read -rt 0.1 <> <(:) || true
     done
     die "Port Kill did not stop" 1
     ;;

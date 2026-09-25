@@ -56,3 +56,17 @@ test("statusColor follows Port Kill's icon levels", () => {
   assert.equal(M.statusColor(9), "#ffa500")
   assert.equal(M.statusColor(10), "#ff0000")
 })
+
+test("malformed process identifiers and ports are discarded", () => {
+  const invalid = [
+    { port: "3000oops" }, { port: 0 }, { port: 65536 }, { port: 1.5 },
+    { pid: "42oops" }, { pid: 0 }, { pid: -1 }, { pid: 1.5 }
+  ]
+  assert.deepEqual(M.parsePortKill(invalid.map(record).join("\n")), [])
+})
+
+test("non-string names cannot break sorting or menu labels", () => {
+  const rows = M.parsePortKill([record({ name: 42 }), record({ pid: 2, name: "node" })].join("\n"))
+  assert.equal(rows.length, 2)
+  assert.equal(M.menuLabel(rows[0]), "Kill: Port 3000: 42")
+})

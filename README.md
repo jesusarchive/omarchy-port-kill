@@ -2,13 +2,13 @@
 
 ![Port Killer's bar menu next to Port Kill running in a terminal](preview.png)
 
-An Omarchy bar menu for [Port Kill](https://portkill.com/). Run Port Kill from
-a terminal or the app launcher, and its status icon appears in the bar, as it
-does in the macOS status bar. The terminal shows Port Kill's live log; the bar
-menu lists the processes it finds on development ports and stops them.
+View and stop development processes from the Omarchy bar with
+[Port Kill](https://portkill.com/). Start `port-kill-console` in a terminal
+or from the app launcher to show the icon. The menu lists its processes on
+ports 2000 through 9000 and lets you stop one port or all of them.
 
-Port Kill does the scanning and killing. This plugin gives it the same compact
-menu it has on macOS, built from Omarchy shell components.
+Port Kill handles scanning and stopping processes. This plugin adds the bar
+icon and menu; it does not install or start Port Kill for you.
 
 ## Requirements
 
@@ -39,7 +39,7 @@ omarchy tui install "Port Kill" port-kill-console float \
 omarchy plugin add https://github.com/jesusarchive/omarchy-port-killer.git --enable
 ```
 
-After `omarchy plugin update`, run `omarchy-restart-shell` so the shell loads
+After `omarchy plugin update`, run `omarchy restart shell` so the shell loads
 every updated file.
 
 ## Use
@@ -50,13 +50,11 @@ the terminal prints Port Kill's port status as it changes. Choose `Quit` in the
 menu, close the terminal, or press Ctrl+C to stop Port Kill; the icon
 disappears with it.
 
-![Port Kill's terminal log picking up a kill from the bar](assets/terminal.png)
-
 ![The Port Killer menu with three development ports](assets/menu.png)
 
 The icon follows Port Kill's status icon. The center is green when nothing is
 running, orange for 1 to 9 processes, and red for 10 or more. It turns grey
-if `port-kill-console` or `lsof` is missing; hover it to see which.
+when a dependency is missing or a command fails; hover it to read the error.
 
 - Left-click the icon to open or close the menu.
 - Right-click the icon to refresh the list.
@@ -64,8 +62,27 @@ if `port-kill-console` or `lsof` is missing; hover it to see which.
   2000 through 9000.
 - Choose `Kill: Port N: process` to stop the process on that port.
 - Choose `Quit` to stop Port Kill, like Ctrl+C in its terminal.
-- Use the arrow keys or `j` and `k` to move, and Enter or Delete to select.
-- Press `a` for kill all, `r` to refresh, or Escape to close.
+
+Keyboard controls follow Omarchy's built-in panels:
+
+| Key | Action |
+| --- | --- |
+| Up / Down or `k` / `j` | Move through the menu |
+| Enter / Space | Activate the selected item |
+| `x` | Stop the selected port, with no action on Kill All or Quit |
+| `a` | Stop all listed processes |
+| `r` | Refresh the list |
+| Tab / Shift+Tab | Switch to the next / previous bar panel |
+| Escape | Close the menu |
+
+Stopping a port stops the processes listening on it, which also closes any
+other ports they own. These actions run immediately, without confirmation.
+`Quit` stops your running Port Kill monitors but leaves development processes
+running.
+
+The terminal logs changes made from the menu:
+
+![Port Kill's terminal log picking up a kill from the bar](assets/terminal.png)
 
 To open the menu from a keybinding, toggle it over the shell's IPC:
 
@@ -100,9 +117,18 @@ omarchy plugin validate .
 
 `portkill.sh` checks for a running Port Kill monitor, then runs
 `port-kill-console --json` and returns its records. `Model.js`
-parses them and formats the menu, and `Panel.qml` renders it. The tests use a
-fake Port Kill, plus one live test that runs when Port Kill and `lsof` are
-installed.
+parses and formats the records, `Service.qml` polls the backend, and
+`Panel.qml` renders the menu using Omarchy's shared panel components.
+
+The default tests use fake binaries and isolated monitor discovery. To test
+with installed copies of Port Kill and `lsof`, run:
+
+```bash
+PORT_KILL_INTEGRATION=1 node --test tests/
+```
+
+The integration test starts its own monitor and listener on an available port
+between 8900 and 8999, verifies discovery, and stops that listener.
 
 ## License
 

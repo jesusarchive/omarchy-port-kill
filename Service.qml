@@ -8,7 +8,6 @@ Item {
 
   property var settings: ({})
   property var rows: []
-  property bool loaded: false
   // "stopped" (no Port Kill monitor), "ready", "missing" (no Port Kill),
   // "no-lsof", or "error".
   property string status: "stopped"
@@ -23,6 +22,8 @@ Item {
   property string _scanError: ""
   property string _killError: ""
   property string _signature: ""
+  property string scanError: ""
+  property string actionError: ""
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -56,8 +57,8 @@ Item {
       _signature = signature
       rows = next
     }
+    scanError = ""
     status = "ready"
-    loaded = true
   }
 
   function applyFailure(exitCode, stderr) {
@@ -67,8 +68,8 @@ Item {
       : "error"
     _signature = ""
     rows = []
-    loaded = true
-    if (status === "error") console.warn("Port Kill: " + elide(stderr || "Could not list listening ports"))
+    scanError = elide(stderr || "Could not list listening ports")
+    if (status === "error") console.warn("Port Kill: " + scanError)
   }
 
   function kill(row) {
@@ -88,6 +89,7 @@ Item {
 
   function startKill(command) {
     _killError = ""
+    actionError = ""
     killProcess.command = command
     killProcess.running = true
   }
@@ -140,7 +142,10 @@ Item {
     }
     onExited: function(exitCode) {
       var stderr = String(killStderr.text || root._killError || "")
-      if (exitCode !== 0) console.warn("Port Kill: " + root.elide(stderr || "Kill command exited with code " + exitCode))
+      if (exitCode !== 0) {
+        root.actionError = root.elide(stderr || "Command exited with code " + exitCode)
+        console.warn("Port Kill: " + root.actionError)
+      }
       root.refresh()
     }
   }

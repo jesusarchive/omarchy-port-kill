@@ -16,9 +16,10 @@ function parsePortKill(raw) {
     } catch (e) {
       continue
     }
-    var port = parseInt(record.port, 10)
-    var pid = parseInt(record.pid, 10)
-    if (!isFinite(port) || !isFinite(pid)) continue
+    var port = Number(record.port)
+    var pid = Number(record.pid)
+    if (!isFinite(port) || port % 1 !== 0 || port < 1 || port > 65535) continue
+    if (!isFinite(pid) || pid % 1 !== 0 || pid < 1) continue
 
     var key = port + ":" + pid
     if (seen[key]) continue
@@ -27,8 +28,8 @@ function parsePortKill(raw) {
       key: key,
       port: port,
       pid: pid,
-      name: record.name || record.command || "process",
-      container: record.container_name || ""
+      name: String(record.name || record.command || "process"),
+      container: String(record.container_name || "")
     })
   }
 

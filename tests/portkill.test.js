@@ -9,9 +9,6 @@ const M = require("../Model.js")
 
 const script = path.resolve(__dirname, "..", "portkill.sh")
 
-// Any Port Kill monitor on this machine makes "not running" untestable.
-const realMonitor = spawnSync("pgrep", ["-x", "port-kill|port-kill-conso"]).status === 0
-
 // A fake Port Kill that logs its arguments and prints a DEBUG line before one
 // JSON record, like the real binary.
 async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true } = {}) {
@@ -20,6 +17,8 @@ async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true
   const bin = path.join(dir, "bin")
   fs.mkdirSync(bin)
   const log = path.join(dir, "args.log")
+  const proc = path.join(dir, "proc")
+  fs.mkdirSync(proc)
 
   if (withPortKill) {
     fs.writeFileSync(path.join(bin, "port-kill-console"), [
@@ -42,11 +41,12 @@ async function fakeEnv(t, { withPortKill = true, withLsof = true, monitor = true
     ].join(";")], { stdio: ["ignore", "pipe", "ignore"] })
     t.after(() => monitorProcess.kill("SIGKILL"))
     await once(monitorProcess.stdout, "data")
+    fs.symlinkSync(`/proc/${monitorProcess.pid}`, path.join(proc, String(monitorProcess.pid)))
   }
 
   // Only the fake binaries are on PATH, and HOME hides any real
   // ~/.local/bin/port-kill-console.
-  const env = { PATH: bin, HOME: dir }
+  const env = { PATH: bin, HOME: dir, PORT_KILL_PROC_ROOT: proc }
   const run = (...args) => spawnSync("/bin/bash", [script, ...args], { encoding: "utf8", env })
   const calls = () => fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : []
   return { run, calls, monitor: monitorProcess }
@@ -74,11 +74,13 @@ test("kill-all uses Port Kill's default range", async t => {
 test("invalid ports never reach Port Kill", async t => {
   const { run, calls } = await fakeEnv(t)
   assert.equal(run("kill", "nope").status, 2)
-  assert.equal(run("kill", "70000").status, 2)
+  for (const port of ["70000", "0", "-1", "3000oops", "999999999999999999999999"]) {
+    assert.equal(run("kill", port).status, 2)
+  }
   assert.deepEqual(calls(), [])
 })
 
-test("list reports a stopped Port Kill without calling it", { skip: realMonitor && "a Port Kill monitor is running" }, async t => {
+test("list reports a stopped Port Kill without calling it", async t => {
   const { run, calls } = await fakeEnv(t, { monitor: false })
   assert.equal(run("list").status, 5)
   assert.deepEqual(calls(), [])
@@ -99,16 +101,18 @@ test("missing Port Kill and missing lsof have their own exit codes", async t => 
   assert.equal((await fakeEnv(t, { withLsof: false })).run("list").status, 4)
 })
 
-// Runs against the real binary when Port Kill and lsof are installed.
+// Opt in to the integration test. It only stops the listener it creates.
 const realPortKill = spawnSync("bash", ["-c", 'PATH="$HOME/.local/bin:$PATH"; command -v port-kill-console && command -v lsof'], { encoding: "utf8" })
-test("real Port Kill lists and stops a listener", { skip: realPortKill.status !== 0 && "Port Kill or lsof is not installed" }, async t => {
+test("real Port Kill lists and stops a listener", { timeout: 15000, skip: process.env.PORT_KILL_INTEGRATION !== "1" ? "set PORT_KILL_INTEGRATION=1 to run" : realPortKill.status !== 0 && "Port Kill or lsof is not installed" }, async t => {
   const monitor = spawn("bash", ["-c", 'PATH="$HOME/.local/bin:$PATH" exec port-kill-console'], { stdio: "ignore" })
   t.after(() => monitor.kill("SIGKILL"))
 
   const child = spawn(process.execPath, ["-e", [
     "const net = require('node:net')",
     "const server = net.createServer(() => {})",
-    "server.listen(0, '127.0.0.1', () => console.log(server.address().port))"
+    "let port = 8900",
+    "server.on('error', e => { if (e.code === 'EADDRINUSE' && port < 8999) server.listen(++port, '127.0.0.1'); else throw e })",
+    "server.listen(port, '127.0.0.1', () => console.log(server.address().port))"
   ].join(";")], { stdio: ["ignore", "pipe", "inherit"] })
   t.after(() => { if (child.exitCode === null) child.kill("SIGKILL") })
   const [chunk] = await once(child.stdout, "data")
@@ -122,13 +126,24 @@ test("real Port Kill lists and stops a listener", { skip: realPortKill.status !=
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   assert.equal(list.status, 0, list.stderr)
-  // Port Kill only scans 2000-9000 by default, so an ephemeral port may be
-  // outside the list; the kill below targets the port directly.
-  if (port >= 2000 && port <= 9000) {
-    assert.ok(M.parsePortKill(list.stdout).some(row => row.port === port))
-  }
+  assert.ok(M.parsePortKill(list.stdout).some(row => row.port === port && row.pid === child.pid))
+  const exited = once(child, "exit")
 
   const kill = spawnSync("bash", [script, "kill", String(port)], { encoding: "utf8" })
   assert.equal(kill.status, 0, kill.stderr)
-  await once(child, "exit")
+  await exited
+})
+
+test("leading zero ports are passed as decimal", async t => {
+  const { run, calls } = await fakeEnv(t)
+  assert.equal(run("kill", "08000").status, 0)
+  assert.deepEqual(calls(), ["--ports 8000 --kill-all"])
+})
+
+test("usage errors never call the backend", async t => {
+  const { run, calls } = await fakeEnv(t)
+  for (const args of [[], ["unknown"], ["list", "extra"], ["kill"], ["quit", "extra"], ["kill-all", "extra"]]) {
+    assert.equal(run(...args).status, 2)
+  }
+  assert.deepEqual(calls(), [])
 })

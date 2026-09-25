@@ -16,7 +16,7 @@ Panel {
   // Kill All, one row per port, then Quit.
   readonly property int itemCount: ports.rows.length + 2
   readonly property int quitIndex: itemCount - 1
-  readonly property bool needsSetup: ports.status === "missing" || ports.status === "no-lsof"
+  readonly property bool hasError: !ports.ready || ports.actionError !== ""
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   // The menu clips its rows; keep them 1px inside so the cursor border on the
@@ -98,8 +98,7 @@ Panel {
     else kill(selectedRow())
   }
 
-  // Like Port Kill's macOS status item, the widget only shows while Port Kill
-  // runs.
+  // Show the widget only while a Port Kill monitor runs.
   visible: ports.running
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -141,15 +140,17 @@ Panel {
             anchors.centerIn: parent
             width: Math.round(parent.width * 0.32)
             height: width
-            color: root.needsSetup ? "#808080" : Model.statusColor(root.processCount)
+            color: root.hasError ? "#808080" : Model.statusColor(root.processCount)
           }
         }
       }
     }
-    tooltipText: ports.status === "missing" ? "Port Kill is not installed"
+    tooltipText: ports.actionError ? ports.actionError
+      : ports.status === "error" ? ports.scanError
+      : ports.status === "missing" ? "Port Kill is not installed"
       : ports.status === "no-lsof" ? "Port Kill needs lsof"
       : root.processCount === 0 ? "No development processes running"
-      : root.processCount + " development process(es) running"
+      : root.processCount + (root.processCount === 1 ? " development process running" : " development processes running")
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.RightButton) ports.refresh()
       else root.toggle()
@@ -177,12 +178,12 @@ Panel {
         if (dy !== 0) root.moveCursor(dy)
       }
       onActivateRequested: root.activateCursor()
-      onDeleteRequested: root.activateCursor()
+      onDeleteRequested: root.kill(root.selectedRow())
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(text) {
-        if (text === "r") ports.refresh()
-        else if (text === "a") root.killAll()
+        if (text === "r" || text === "R") ports.refresh()
+        else if (text === "a" || text === "A") root.killAll()
       }
 
       Flickable {
@@ -213,7 +214,7 @@ Panel {
           }
 
           PanelSeparator {
-            visible: ports.ready
+            visible: ports.rows.length > 0
             width: parent.width
             foreground: root.foreground
           }

@@ -2,17 +2,17 @@
   "schemaVersion": 1,
   "id": "jesusarchive.port-killer",
   "name": "Port Killer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "jesusarchive",
   "license": "MIT",
-  "description": "An Omarchy bar menu for Port Kill: find and stop processes on development ports.",
+  "description": "View and stop development processes from the bar while Port Kill is running.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "Panel.qml"
   },
   "barWidget": {
     "displayName": "Port Killer",
-    "description": "Stop the processes Port Kill finds on one port or across ports 2000 through 9000. Requires Port Kill and lsof.",
+    "description": "Stop processes on one port or across ports 2000–9000. Requires a running Port Kill monitor and lsof.",
     "category": "System",
     "aliases": ["ports", "port-kill", "kill-port"],
     "allowMultiple": false,
