@@ -30,6 +30,10 @@ sys.dont_write_bytecode = True
 from monitors import lease_dir, lease_names, open_lease, require_pidfd, start_time
 
 
+class TerminalUnavailable(RuntimeError):
+    pass
+
+
 def focus_existing():
     """Find a window belonging to a registered monitor or our log display."""
     directories = [lease_dir(), lease_dir().parent / "log-terminals"]
@@ -139,9 +143,12 @@ def launch_terminal(address):
         "xdg-terminal-exec", "--app-id=TUI.float", "--title=Port Kill logs", "--",
         sys.executable, str(Path(__file__).resolve()), "display", identity, address,
     ]
-    launcher = os.posix_spawnp(command[0], command, os.environ, file_actions=[
-        (os.POSIX_SPAWN_OPEN, 0, "/dev/null", os.O_RDONLY, 0o600),
-    ])
+    try:
+        launcher = os.posix_spawnp(command[0], command, os.environ, file_actions=[
+            (os.POSIX_SPAWN_OPEN, 0, "/dev/null", os.O_RDONLY, 0o600),
+        ])
+    except OSError as error:
+        raise TerminalUnavailable("Could not launch a terminal") from error
     launcher_fd = os.pidfd_open(launcher)
     try:
         yield launcher, launcher_fd
@@ -175,9 +182,12 @@ def run_backend(binary, descriptors):
     environment = os.environ.copy()
     environment.setdefault("RUST_LOG", "warn")
     # The controller owns the backend; the display only lends its tty.
-    backend = subprocess.Popen([binary], stdin=descriptors[0], stdout=descriptors[1],
-        stderr=descriptors[2], env=environment, start_new_session=True,
-        preexec_fn=lambda: child_setup(parent))
+    try:
+        backend = subprocess.Popen([binary], stdin=descriptors[0], stdout=descriptors[1],
+            stderr=descriptors[2], env=environment, start_new_session=True,
+            preexec_fn=lambda: child_setup(parent))
+    except OSError as error:
+        raise TerminalUnavailable("Could not launch Port Kill") from error
     fd = None
     try:
         fd = os.pidfd_open(backend.pid)
@@ -222,7 +232,7 @@ def supervise_terminal(binary, resources):
         while True:
             remaining = deadline - time.monotonic() if connection is None else None
             if remaining is not None and remaining <= 0:
-                raise RuntimeError("The log terminal did not open within 10 seconds")
+                raise TerminalUnavailable("The log terminal did not open within 10 seconds")
             for ready, _ in poller.poll(None if remaining is None else max(1, int(remaining * 1000))):
                 if ready == sys.stdin.fileno():
                     if not os.read(ready, 4096):
@@ -230,7 +240,7 @@ def supervise_terminal(binary, resources):
                 elif ready == launcher_fd:
                     _, status = os.waitpid(launcher, 0)
                     if os.waitstatus_to_exitcode(status):
-                        raise RuntimeError(f"Terminal launcher exited with code {os.waitstatus_to_exitcode(status)}")
+                        raise TerminalUnavailable(f"Terminal launcher exited with code {os.waitstatus_to_exitcode(status)}")
                     poller.unregister(launcher_fd)
                 elif ready == server.fileno():
                     connection, _ = server.accept()
@@ -300,6 +310,9 @@ if __name__ == '__main__':
             sys.exit(display(sys.argv[2], sys.argv[3]))
         print('Usage: terminal_logs.py own <binary> | display <owner> <socket> | focus', file=sys.stderr)
         sys.exit(2)
+    except TerminalUnavailable as error:
+        print(error, file=sys.stderr)
+        sys.exit(3)
     except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
         print(error, file=sys.stderr)
         sys.exit(1)

@@ -6,6 +6,8 @@ These changes target plugin version 0.4.0.
 
 ### Monitoring and controls
 
+- Hide the bar widget while required dependencies are missing, without a
+  dependency tooltip. Right-click falls back to the menu if logs cannot open.
 - Plugin-opened terminals now default to quieter logging while retaining
   process-status output, warnings, and errors. Explicit logging preferences and
   manually entered commands keep their behavior. The menu retains Omarchy styling.

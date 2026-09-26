@@ -63,6 +63,11 @@ unload stops the watcher in both modes.
 
 ## Scanning and port actions
 
+The widget stays hidden until scan and tracking dependencies are checked.
+Missing dependencies keep it hidden while existing retries check for recovery.
+The scan preflight checks Port Kill, lsof, Python, timeout, and flock. Terminal
+availability does not gate the widget; a failed log launch opens the menu.
+
 The watcher reads socket tables at the configured interval. A change on ports
 2000 through 9000 requests a full Port Kill scan. Background requests start at
 most one scan every five seconds. Startup, menu opening, explicit refresh, and

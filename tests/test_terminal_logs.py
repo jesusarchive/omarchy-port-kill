@@ -63,7 +63,7 @@ class TerminalLogsTests(unittest.TestCase):
              patch.object(terminal_logs.sys, 'stdin', stream), \
              patch.object(terminal_logs.os, 'posix_spawnp', side_effect=FileNotFoundError('no terminal')):
             before = len(os.listdir('/proc/self/fd'))
-            with self.assertRaisesRegex(FileNotFoundError, 'no terminal'):
+            with self.assertRaisesRegex(terminal_logs.TerminalUnavailable, 'Could not launch'):
                 terminal_logs.own_locked('/usr/bin/cat')
             self.assertEqual(len(os.listdir('/proc/self/fd')), before)
 
@@ -177,7 +177,7 @@ class TerminalLogsTests(unittest.TestCase):
 
     def test_terminal_launch_failure_is_reported(self):
         owner, started = self.start(launch_code=7)
-        self.assertEqual(owner.wait(timeout=2), 1)
+        self.assertEqual(owner.wait(timeout=2), 3)
         self.assertIn(b'Terminal launcher exited with code 7', owner.stderr.read())
         self.assertFalse(started.exists())
 

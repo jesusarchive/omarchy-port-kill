@@ -4,8 +4,8 @@
 # SIGTERM/SIGKILL sequence; this script finds the binary, registers terminal
 # monitors so the bar can show its icon, and bounds background commands.
 #
-# Exit codes: 0 ok, 1 Port Kill failed, 2 usage, 3 Port Kill or Python
-# missing, 4 lsof missing, 6 Port Kill timed out.
+# Exit codes: 0 ok, 1 Port Kill failed, 2 usage, 3 missing dependency,
+# 4 lsof missing, 6 Port Kill timed out.
 
 die() {
   printf '%s\n' "$1" >&2
@@ -25,6 +25,14 @@ require_backend() {
   port_kill=${PORT_KILL_CONSOLE:-$(find_binary port-kill-console)}
   [[ -n $port_kill && -x $port_kill ]] || die "Port Kill is not installed" 3
   command -v lsof >/dev/null || die "Port Kill needs lsof" 4
+}
+
+require_plugin_dependencies() {
+  require_backend
+  local dependency
+  for dependency in python3 timeout flock; do
+    command -v "$dependency" >/dev/null || die "Port Kill needs $dependency" 3
+  done
 }
 
 # Background commands get a deadline. timeout signals its whole process
@@ -161,6 +169,7 @@ action=${1:-}
 case $action in
   logs-focus)
     (($# == 1)) || die "Usage: portkill.sh logs-focus"
+    command -v python3 >/dev/null || die "Port Kill needs Python 3 for terminal logs" 3
     exec python3 "$script_dir/terminal_logs.py" focus
     ;;
   logs)
@@ -188,7 +197,7 @@ case $action in
     ;;
   list)
     (($# == 1)) || die "Usage: portkill.sh list"
-    require_backend
+    require_plugin_dependencies
     # The bar parses stdout, including Port Kill's log lines, and reports
     # anything it does not recognize.
     run_bounded "${PORT_KILL_SCAN_TIMEOUT:-10}" keep "Port Kill could not list ports" --json

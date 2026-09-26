@@ -10,6 +10,7 @@ ShellRoot {
 
   property var history: []
   property string mode: "terminal"
+  property int menuFallbacks: 0
 
   function record(event) {
     var next = history.slice()
@@ -17,6 +18,7 @@ ShellRoot {
       at: Date.now(),
       event: event,
       active: ports.active,
+      widgetVisible: ports.widgetVisible,
       status: ports.status,
       rows: ports.rows.map(function(row) { return row.key + ":" + row.name })
     })
@@ -31,9 +33,11 @@ ShellRoot {
     watchdogGraceMs: 1000
     scheduleOptions: ({ minScanGapMs: 1500, maxAgeMs: 4000, retryBaseMs: 500, retryMaxMs: 2000 })
     onActiveChanged: shell.record("active")
+    onWidgetVisibleChanged: shell.record("visible")
     onStatusChanged: shell.record("status")
     onRowsChanged: shell.record("rows")
     onActionErrorChanged: shell.record("actionError")
+    onTerminalUnavailable: shell.menuFallbacks++
   }
 
   IpcHandler {
@@ -41,6 +45,8 @@ ShellRoot {
     function state(): string {
       return JSON.stringify({
         active: ports.active,
+        widgetVisible: ports.widgetVisible,
+        menuFallbacks: shell.menuFallbacks,
         monitoringMode: ports.monitoringMode,
         refreshing: ports.refreshing,
         monitorCount: ports.monitorCount,

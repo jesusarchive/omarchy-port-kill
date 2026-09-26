@@ -10,6 +10,11 @@ Item {
   property var settings: ({})
   property var rows: []
   property bool active: false
+  property bool scanDependenciesAvailable: false
+  property bool trackingDependenciesAvailable: false
+  readonly property bool dependenciesAvailable: scanDependenciesAvailable && trackingDependenciesAvailable
+  readonly property bool widgetVisible: active && dependenciesAvailable
+  signal terminalUnavailable()
   property bool stoppedByUser: false
   property bool quitting: false
   property bool quitCommandDone: false
@@ -39,7 +44,7 @@ Item {
   readonly property bool busy: acting || quitting
   // Kills act on ports as Port Kill sees them when the action runs, so only
   // offer them while the displayed list is current.
-  readonly property bool canAct: active && !stoppedByUser && ready && !busy && !refreshing && !refreshRequired && !socketError && !watchError
+  readonly property bool canAct: widgetVisible && !stoppedByUser && ready && !busy && !refreshing && !refreshRequired && !socketError && !watchError
   readonly property string portKillScript: localPath("portkill.sh")
 
   // Deadlines passed to portkill.sh. The watchdogs below only fire if the
@@ -105,6 +110,7 @@ Item {
       return
     }
     watcherFailures = 0
+    trackingDependenciesAvailable = true
     watchError = ""
     if (event.type === "monitors") {
       monitorCount = event.count
@@ -138,6 +144,7 @@ Item {
     rows = []
     _signature = ""
     status = "starting"
+    scanDependenciesAvailable = false
     scanError = ""
     actionError = ""
     socketError = ""
@@ -159,6 +166,7 @@ Item {
       return
     }
     watcherFailures++
+    trackingDependenciesAvailable = exitCode !== 3
     watchError = elide(stderr || "Monitor tracking exited with code " + exitCode)
     console.warn("Port Kill: " + watchError)
     if (watcherFailures <= 5) {
@@ -215,6 +223,8 @@ Item {
     var parsed = exitCode === 0 ? Model.parsePortKill(stdout) : null
     var ok = parsed !== null && parsed.errors.length === 0
     var outcome = Scheduler.finishScan(schedule, scanGeneration, ok, Date.now())
+    if (outcome !== "discard")
+      scanDependenciesAvailable = exitCode !== 3 && exitCode !== 4
     if (outcome === "apply") {
       applyRows(parsed.rows)
       status = "ready"
@@ -265,7 +275,7 @@ Item {
   }
 
   function openTerminalLogs() {
-    if (quitting || !active) return
+    if (quitting || !widgetVisible) return
     logTerminal.open()
   }
 
@@ -340,7 +350,10 @@ Item {
 
   function finishAction(exitCode, stderr) {
     actionWatchdog.stop()
-    if (exitCode !== 0) {
+    if (!quitting && (exitCode === 3 || exitCode === 4)) {
+      scanDependenciesAvailable = false
+      actionError = ""
+    } else if (exitCode !== 0) {
       actionError = elide(exitCode === 6 || exitCode === -1
         ? (stderr || "Port Kill did not finish in time") + ". It was not retried."
         : stderr || "Command exited with code " + exitCode)
@@ -440,6 +453,7 @@ Item {
   LogTerminal {
     id: logTerminal
     scriptPath: root.portKillScript
+    onUnavailable: if (!root.quitting && root.widgetVisible) root.terminalUnavailable()
     onErrorReported: function(message) { root.terminalError = root.elide(message) }
     onFinished: function(exitCode, stderr) {
       if (exitCode !== 0 && root.quitting) {

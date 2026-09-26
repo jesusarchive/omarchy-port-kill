@@ -101,13 +101,12 @@ Panel {
   }
 
   function tooltip() {
+    if (!ports.dependenciesAvailable) return ""
     var time = ports.lastScanAt ? Qt.formatTime(ports.lastScanAt, "HH:mm:ss") : ""
     var staleNote = ports.stale ? " Showing the list from " + time + "." : ""
     if (ports.terminalError) return ports.terminalError
     if (ports.actionError) return ports.actionError
     if (ports.watchError) return ports.watchError + staleNote
-    if (ports.status === "missing") return "Port Kill is not installed"
-    if (ports.status === "no-lsof") return "Port Kill needs lsof"
     if (ports.status === "timeout" || ports.status === "error") return ports.scanError + staleNote
     if (ports.status === "starting") return "Checking ports..."
     if (ports.refreshing) return "Refreshing ports... Last checked " + time + "."
@@ -116,7 +115,7 @@ Panel {
     return ports.socketError ? text + ". Change detection failed: " + ports.socketError : text
   }
 
-  visible: ports.active
+  visible: ports.widgetVisible
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -132,6 +131,7 @@ Panel {
   Service {
     id: ports
     settings: root.settings
+    onTerminalUnavailable: root.open()
   }
 
   TextMetrics {

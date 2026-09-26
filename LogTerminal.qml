@@ -11,6 +11,11 @@ Item {
 
   signal errorReported(string message)
   signal finished(int exitCode, string stderr)
+  signal unavailable()
+
+  function missingDependency(exitCode) {
+    return exitCode === 3 || exitCode === 4
+  }
 
   function open() {
     if (terminalProcess.running && terminalProcess.stdinEnabled) {
@@ -48,8 +53,9 @@ Item {
     command: ["bash", root.scriptPath, "logs-focus"]
     stderr: StdioCollector { id: focusStderr; waitForEnd: true }
     onExited: function(exitCode) {
-      if (exitCode !== 0 && focusStderr.text)
+      if (exitCode !== 0 && !root.missingDependency(exitCode) && focusStderr.text)
         root.errorReported(String(focusStderr.text))
+      if (exitCode !== 0) root.unavailable()
     }
   }
 
@@ -61,8 +67,9 @@ Item {
     stderr: StdioCollector { id: terminalStderr; waitForEnd: true }
     onExited: function(exitCode) {
       var stderr = String(terminalStderr.text || "")
-      if (exitCode !== 0 && root.requested)
+      if (exitCode !== 0 && !root.missingDependency(exitCode) && root.requested)
         root.errorReported(stderr || "Could not open the log terminal")
+      if (exitCode !== 0 && root.requested) root.unavailable()
       // A request can arrive while the previous controller is closing.
       if (!stdinEnabled && root.requested) Qt.callLater(root.updateRequest)
       else root.requested = false

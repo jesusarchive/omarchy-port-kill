@@ -381,13 +381,21 @@ test("missing dependencies have their own exit codes", t => {
   assert.equal(fakeEnv(t, { withPortKill: false }).run(["list"]).status, 3)
   assert.equal(fakeEnv(t, { withLsof: false }).run(["list"]).status, 4)
   const noPython = fakeEnv(t, { withPython: false })
-  for (const action of ["watch", "quit"]) {
+  for (const action of ["watch", "quit", "logs-focus"]) {
     const result = noPython.run([action])
     assert.equal(result.status, 3)
     assert.match(result.stderr, /Python 3/)
   }
   const missing = fakeEnv(t, { withPortKill: false }).run(["run", "port-kill"])
   assert.equal(missing.status, 127)
+  for (const tool of ["python3", "timeout", "flock"]) {
+    const env = fakeEnv(t)
+    fs.unlinkSync(path.join(env.dir, "tools", tool))
+    const result = env.run(["list"])
+    assert.equal(result.status, 3, tool)
+    assert.match(result.stderr, new RegExp(tool))
+    assert.deepEqual(env.calls(), [], "missing dependency prevents scanning")
+  }
 })
 
 test("quit stops registered monitors and leaves everything else running", async t => {

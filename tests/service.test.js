@@ -311,12 +311,65 @@ test("malformed output is reported, and failed scans retry without socket change
   await h.wait(s => s.status === "ready", 5000, "recovered from backend failure by retrying")
 })
 
-test("a missing backend is reported", { skip, timeout: 20000 }, async t => {
-  const h = harness(t, { backendMissing: true })
+for (const mode of ["terminal", "always"]) {
+  test(`missing backend keeps ${mode} mode hidden until installation`, { skip, timeout: 20000 }, async t => {
+    const h = harness(t, { backendMissing: true })
+    await h.start()
+    h.call("mode", mode)
+    if (mode === "terminal") await h.launch()
+    const state = await h.wait(s => s.active && s.status === "missing", 5000, "missing")
+    assert.equal(state.widgetVisible, false)
+    assert.equal(state.canAct, false)
+    assert.ok(state.history.every(event => !event.widgetVisible), "no startup icon flash")
+    h.call("debug")
+    await sleep(100)
+    assert.equal(h.state().terminalError, "")
+    fs.copyFileSync(path.join(h.dir, "bin", "port-kill-console"), path.join(h.dir, "missing"))
+    await h.wait(s => s.widgetVisible && s.canAct, 5000, "appears after installation")
+    fs.unlinkSync(path.join(h.dir, "missing"))
+    h.call("open")
+    await h.wait(s => !s.widgetVisible && s.status === "missing", 5000, "hidden after removal")
+  })
+}
+
+test("dependency failures hide the widget, ordinary scan failures remain visible", { skip, timeout: 20000 }, async t => {
+  const h = harness(t)
+  const script = path.join(h.config, "portkill.sh")
+  fs.renameSync(script, path.join(h.config, "original.sh"))
+  writeExecutable(script, [
+    `if [[ $1 == list && -f '${h.ctl}/dependency-code' ]]; then`,
+    `  echo 'Missing test dependency' >&2`,
+    `  exit "$(cat '${h.ctl}/dependency-code')"`,
+    'fi',
+    `exec bash '${h.config}/original.sh' "$@"`
+  ])
+  h.set("dependency-code", 4)
   await h.start()
-  await h.launch()
-  const state = await h.wait(s => s.active && s.status === "missing", 5000, "missing")
-  assert.equal(state.canAct, false)
+  h.call("mode", "always")
+  await h.wait(s => s.status === "no-lsof" && !s.widgetVisible, 5000, "missing lsof")
+  h.set("dependency-code", 3)
+  h.call("open")
+  await h.wait(s => s.status === "missing" && !s.widgetVisible, 5000, "missing helper")
+  h.unset("dependency-code")
+  await h.wait(s => s.canAct && s.widgetVisible, 5000, "dependencies restored")
+  h.set("list.exit", 1)
+  h.call("open")
+  await h.wait(s => s.status === "error" && s.widgetVisible, 5000, "ordinary error visible")
+})
+
+test("a dependency removed before an action hides the widget without leaving an error", { skip, timeout: 15000 }, async t => {
+  const h = harness(t)
+  await h.start()
+  h.call("mode", "always")
+  await h.wait(s => s.canAct, 5000, "ready")
+  const binary = path.join(h.dir, "bin", "port-kill-console")
+  fs.renameSync(binary, binary + ".saved")
+  h.call("kill", 3000)
+  await h.wait(s => !s.widgetVisible && !s.busy, 5000, "hidden")
+  assert.equal(h.state().actionError, "")
+  fs.renameSync(binary + ".saved", binary)
+  await h.wait(s => s.widgetVisible && s.canAct, 5000, "restored")
+  assert.equal(h.state().actionError, "")
 })
 
 test("a hung scan times out, frees the scheduler and recovers", { skip, timeout: 30000 }, async t => {
@@ -493,7 +546,7 @@ test("on-demand logs open once, reopen after closing, and end with the shell", {
   await h.start();
   h.call("mode", "always");
   assert.equal(pid(), 0);
-  await h.wait(s => s.active, 4000, "monitoring active");
+  await h.wait(s => s.widgetVisible, 4000, "monitoring visible");
   h.call("debug");
   await until(pid, 4000, "debug terminal opened");
   const first = pid();
@@ -528,6 +581,21 @@ test("on-demand logs open once, reopen after closing, and end with the shell", {
   await h.stopShell("SIGKILL");
   await until(() => !fs.existsSync(`/proc/${third}`), 5000, "debug terminal ended with shell");
 });
+
+for (const missing of ["terminal", "TUI"]) {
+  test(`right-click falls back to the menu without a tooltip when ${missing} is unavailable`, { skip, timeout: 15000 }, async t => {
+    const h = harness(t)
+    writeExecutable(path.join(h.dir, "bin", "xdg-terminal-exec"), ["exit 7"])
+    await h.start()
+    h.call("mode", "always")
+    await h.wait(s => s.widgetVisible && s.canAct, 5000, "widget ready")
+    if (missing === "TUI") fs.unlinkSync(path.join(h.dir, "bin", "port-kill-console"))
+    h.call("debug")
+    const state = await h.wait(s => s.menuFallbacks === 1, 5000, "menu fallback")
+    assert.equal(state.terminalError, "")
+    if (missing === "terminal") assert.equal(state.widgetVisible, true)
+  })
+}
 
 test("right-click reuses a manually started Port Kill terminal", { skip, timeout: 15000 }, async t => {
   const h = harness(t);
@@ -638,7 +706,7 @@ test("an abruptly killed log display leaves no backend and can be reopened", { s
   ]);
   await h.start();
   h.call("mode", "always");
-  await h.wait(s => s.active, 4000, "monitoring active");
+  await h.wait(s => s.widgetVisible, 4000, "monitoring visible");
   h.call("debug");
   const log = path.join(h.ctl,"terminal.log");
   const backendPid = () => { try { return Number(fs.readFileSync(log,"utf8").trim().split(" ")[1]); } catch { return 0; } };
