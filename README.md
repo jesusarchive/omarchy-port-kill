@@ -25,8 +25,8 @@ omarchy plugin add https://github.com/jesusarchive/omarchy-port-kill.git --enabl
 ```
 
 By default, the icon appears while Port Kill is running through the launcher
-or Bash integration below. Set up either one, or select **Always active** in
-the plugin settings in the bar editor to monitor without a terminal.
+or Bash integration below. Set up either one, or switch to **Always active**
+in [Settings](#settings) to monitor without a terminal.
 
 ### App launcher
 
@@ -75,12 +75,27 @@ refreshing or invalid.
 
 ## Settings
 
-Open the plugin settings in the bar editor:
+Configure the plugin with Omarchy's bar settings commands:
 
 | Setting | Options |
 | --- | --- |
 | When to monitor | **Follow terminal** (default) monitors while a tracked Port Kill terminal is running. **Always active** monitors without a terminal. |
 | Check interval | Seconds between checks for port changes, from 1 to 300. Default: **2**. The terminal monitor uses its own interval. |
+
+Switch to **Always active**:
+
+```bash
+omarchy bar set jesusarchive.port-kill monitoringMode always
+```
+
+Switch back to **Follow terminal**:
+
+```bash
+omarchy bar set jesusarchive.port-kill monitoringMode terminal
+```
+
+Changes are saved and take effect immediately. In Follow terminal mode, the
+icon stays hidden until you start Port Kill through the launcher or Bash integration.
 
 Closing the last tracked terminal stops Follow terminal mode. In Always active
 mode, closing a terminal leaves monitoring and the icon running. A separate log
