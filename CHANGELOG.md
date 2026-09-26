@@ -1,0 +1,41 @@
+# Changelog
+
+## Unreleased
+
+These changes target plugin version 0.4.0.
+
+### Monitoring and controls
+
+- Added Follow terminal and Always active modes in plugin settings. Follow
+  terminal is the default; saved mode and check-interval choices are preserved.
+- Added optional Bash integration and a registered app-launcher command.
+  Interactive monitors activate Follow terminal mode; one-shot commands do not.
+- Added right-click access to activity logs. Existing registered TUIs receive
+  focus; repeated requests reuse the log window. Ambiguous windows report an
+  error without opening a duplicate.
+- Closing a TUI leaves Always active monitoring running. Quit stops registered
+  monitors and the plugin-created log window in either mode, then hides the icon.
+  Development servers keep running.
+- Kept the status colors, menu dividers, Quit item, and tooltip without an added
+  right-click hint. Preferences remain in plugin settings, with no log toggle.
+
+### Lifecycle and failure handling
+
+- Replaced monitor process-name matching with registered process identities and
+  Linux pidfds. The watcher discovers existing monitors after a shell restart.
+- Added session generations so delayed launch notifications cannot undo Quit.
+- Quit now waits for cleanup, escalates unresponsive registered monitors from
+  TERM to KILL, and keeps failures visible with a retry action.
+- Log windows now supervise their backend and clean it up when the display or
+  controller exits. Terminal startup has a deadline.
+- Window focusing now prefers the nearest terminal ancestor over an editor
+  ancestor.
+- Added socket-change detection, serialized scans, automatic scan retries,
+  command deadlines, and rejection of results made obsolete by an action.
+- Added script, scheduler, monitor, terminal, and QML lifecycle regression tests,
+  an opt-in real-backend test, and a CPU measurement tool.
+
+A reported kitty shutdown crash was not reproduced in six real terminal close
+tests. These changes fix confirmed plugin lifecycle defects; they do not claim
+to fix the underlying kitty/Python memory fault. Crash notifications remain
+unchanged.
