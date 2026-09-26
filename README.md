@@ -181,12 +181,6 @@ Press Ctrl+C in the terminal to stop the monitor.
 | Tab / Shift+Tab | Switch to the next / previous bar panel |
 | Escape | Close the menu |
 
-To toggle the menu from a terminal or a custom shortcut:
-
-```bash
-omarchy-shell jesusarchive.port-kill toggle
-```
-
 ## Settings
 
 Configure these preferences in the plugin settings in the bar editor:
