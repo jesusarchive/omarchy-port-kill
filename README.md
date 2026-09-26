@@ -80,7 +80,7 @@ Configure the plugin with Omarchy's bar settings commands:
 | Setting | Options |
 | --- | --- |
 | When to monitor | **Follow terminal** (default) monitors while a tracked Port Kill terminal is running. **Always active** monitors without a terminal. |
-| Check interval | Seconds between checks for port changes, from 1 to 300. Default: **2**. The terminal monitor uses its own interval. |
+| Check interval | How often the bar checks for port changes. Default: **2 seconds**; range: 1 to 300. |
 
 Switch to **Always active**:
 
