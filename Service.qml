@@ -31,7 +31,7 @@ Item {
   property string watchError: ""
   property var lastScanAt: null
 
-  readonly property string monitoringMode: setting("monitoringMode", "terminal") === "always" ? "always" : "terminal"
+  readonly property string monitoringMode: setting("monitoringMode", "always") === "terminal" ? "terminal" : "always"
   readonly property bool alwaysActive: monitoringMode === "always"
   property bool initialized: false
   property bool refreshRequired: true
@@ -188,6 +188,14 @@ Item {
 
   // Scans
 
+  function refreshOnOpen() {
+    if (busy || refreshing) return
+    if (ready && dependenciesAvailable && !refreshRequired && !socketError && !watchError
+        && !schedule.pending && schedule.lastSuccessAt !== null
+        && Date.now() - schedule.lastSuccessAt < schedule.options.maxAgeMs) return
+    refresh()
+  }
+
   function refresh() {
     if (!trackingDependenciesAvailable) reconcile()
     refreshRequired = true
@@ -230,7 +238,7 @@ Item {
       status = "ready"
       scanError = ""
       lastScanAt = new Date()
-      // A menu request queued during this scan still requires its follow-up.
+      // An explicit refresh queued during this scan still requires its follow-up.
       refreshRequired = schedule.pending
     } else if (outcome === "failed") {
       status = exitCode === 3 ? "missing"

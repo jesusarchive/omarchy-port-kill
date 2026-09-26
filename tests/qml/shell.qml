@@ -26,7 +26,8 @@ ShellRoot {
 
   Service {
     id: ports
-    settings: ({ refreshIntervalSec: 1, monitoringMode: shell.mode })
+    settings: shell.mode === "" ? ({ refreshIntervalSec: 1 })
+      : ({ refreshIntervalSec: 1, monitoringMode: shell.mode })
     scanTimeoutSec: 1
     actionTimeoutSec: 1
     watchdogGraceMs: 1000
@@ -65,7 +66,8 @@ ShellRoot {
     function debug(): void { ports.openTerminalLogs() }
     // Exercise a late backend result even when an action bypasses UI gating.
     function forceKill(port: int): void { ports.startAction(["bash", ports.portKillScript, "kill", String(port)]) }
-    function open(): void { ports.refresh() }
+    function open(): void { ports.refreshOnOpen() }
+    function refresh(): void { ports.refresh() }
     function kill(port: int): void { ports.kill({ port: port }) }
     function killAll(): void { ports.killAll() }
     function quit(): void { ports.quit() }

@@ -61,7 +61,7 @@ function deactivate(s) {
   s.generation++
 }
 
-// User-visible requests (activation, menu opening, explicit refresh, after an
+// User-visible requests (activation, explicit refresh, after an
 // action) are urgent and skip the background rate limit, never the
 // one-scan-at-a-time rule.
 function request(s, urgent) {

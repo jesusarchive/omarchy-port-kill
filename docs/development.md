@@ -78,8 +78,10 @@ clicks during terminal startup reuse the pending controller.
 
 The watcher reads socket tables at the configured interval. A change on ports
 2000 through 9000 requests a full Port Kill scan. Background requests start at
-most one scan every five seconds. Startup, menu opening, explicit refresh, and
-completion of an action request an immediate scan. Only one scan runs at a time.
+most one scan every five seconds. Startup, explicit refresh, and completion of
+an action request an immediate scan. Opening the menu reuses a current list or
+an in-flight scan; it requests a refresh if the list is outdated or invalid.
+Only one scan runs at a time.
 A successful result is refreshed after 60 seconds even without socket changes.
 Failed scans retry with exponential backoff from two to 60 seconds.
 
@@ -137,12 +139,11 @@ Changing only the check interval does not resume a stopped session.
 
 ## Settings schema
 
-User preferences are edited through plugin settings in the bar editor. The
-manifest stores them as follows:
+User preferences are set with `omarchy bar set`. The manifest stores them as follows:
 
 | Key | Values | Default |
 | --- | --- | --- |
-| `monitoringMode` | `terminal` or `always` | `terminal` |
+| `monitoringMode` | `terminal` or `always` | `always` |
 | `refreshIntervalSec` | Integer, 1 through 300 | `2` |
 
 There is no terminal-visibility setting. Right-click opens or focuses logs on

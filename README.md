@@ -24,9 +24,10 @@ and open the terminal monitor with a right-click.
 omarchy plugin add https://github.com/jesusarchive/omarchy-port-kill.git --enable
 ```
 
-By default, the icon appears while Port Kill is running through the launcher
-or Bash integration below. Set up either one, or switch to **Always active**
-in [Settings](#settings) to monitor without a terminal.
+By default, **Always active** monitors ports and shows the icon without a
+terminal. Right-click the icon to open logs. The launcher and Bash integration
+below are optional. Set up either one if you choose **Follow terminal** in
+[Settings](#settings).
 
 ### App launcher
 
@@ -39,15 +40,29 @@ omarchy tui install "Port Kill" "bash $HOME/.config/omarchy/plugins/jesusarchive
 
 ### Bash integration
 
-To track `port-kill` and `port-kill-console` commands you type in a terminal,
-add this line to `~/.bashrc`, then open a new terminal:
+This optional integration lets the plugin track Port Kill monitors you start
+by typing `port-kill` or `port-kill-console` in Bash. In **Follow terminal**
+mode, those sessions keep the bar icon active. It also lets right-click reuse
+a terminal you started yourself.
+
+Add this line to `~/.bashrc` so each new Bash terminal loads the integration:
 
 ```bash
 [[ -r "$HOME/.config/omarchy/plugins/jesusarchive.port-kill/port-kill.bash" ]] && source "$HOME/.config/omarchy/plugins/jesusarchive.port-kill/port-kill.bash"
 ```
 
-To use it in an already open Bash terminal, run the same line once.
-This defines shell functions; the installed binaries are unchanged.
+`[[ -r ... ]]` checks that the integration file exists and is readable.
+`&& source ...` loads it into the current shell only when that check succeeds,
+so removing the plugin will not cause an error when you open a terminal.
+
+The file defines Bash functions for `port-kill` and `port-kill-console`.
+They call your installed binaries with the arguments you provide and notify
+the plugin when a monitor starts or exits. Loading the file does not launch a
+monitor; that happens when you run one of the commands.
+
+Open a new terminal after saving `~/.bashrc`, or run the same line once in an
+existing Bash terminal. To remove the integration, delete the line from
+`~/.bashrc` and open a new terminal.
 
 ## Use
 
@@ -79,7 +94,7 @@ Configure the plugin with Omarchy's bar settings commands:
 
 | Setting | Options |
 | --- | --- |
-| When to monitor | **Follow terminal** (default) monitors while a tracked Port Kill terminal is running. **Always active** monitors without a terminal. |
+| When to monitor | **Always active** (default) monitors without a terminal. **Follow terminal** monitors while a tracked Port Kill terminal is running. |
 | Check interval | How often the bar checks for port changes. Default: **2 seconds**; range: 1 to 300. |
 
 Switch to **Always active**:
@@ -88,7 +103,7 @@ Switch to **Always active**:
 omarchy bar set jesusarchive.port-kill monitoringMode always
 ```
 
-Switch back to **Follow terminal**:
+Switch to **Follow terminal**:
 
 ```bash
 omarchy bar set jesusarchive.port-kill monitoringMode terminal

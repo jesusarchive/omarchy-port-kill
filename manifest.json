@@ -26,7 +26,7 @@
     "defaultSection": "right",
     "defaults": {
       "refreshIntervalSec": 2,
-      "monitoringMode": "terminal"
+      "monitoringMode": "always"
     },
     "schema": [
       {
@@ -43,7 +43,7 @@
             "label": "Always active"
           }
         ],
-        "defaultValue": "terminal",
+        "defaultValue": "always",
         "description": "Follow terminal monitors while a tracked Port Kill terminal is running. Always active monitors without a terminal. Quit stops either mode."
       },
       {

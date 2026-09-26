@@ -32,7 +32,7 @@ function writeExecutable(file, lines) {
 
 const record = (pid, port, name) => JSON.stringify({ pid, port, name, command: name, container_name: null })
 
-function harness(t, { maxAgeMs = 4000, backendMissing = false } = {}) {
+function harness(t, { maxAgeMs = 4000, backendMissing = false, mode = "terminal" } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "portkill-qml-"))
   const config = path.join(dir, "config")
   const bin = path.join(dir, "bin")
@@ -42,7 +42,8 @@ function harness(t, { maxAgeMs = 4000, backendMissing = false } = {}) {
     fs.copyFileSync(path.join(root, file), path.join(config, file))
   }
   fs.writeFileSync(path.join(config, "shell.qml"), fs.readFileSync(path.join(__dirname, "qml", "shell.qml"), "utf8")
-    .replace("maxAgeMs: 4000", `maxAgeMs: ${maxAgeMs}`))
+    .replace("maxAgeMs: 4000", `maxAgeMs: ${maxAgeMs}`)
+    .replace('property string mode: "terminal"', `property string mode: ${JSON.stringify(mode)}`))
   const consolePath = path.join(bin, "port-kill-console")
   // The fake reads its behaviour from ctl/ when it starts, so a slow scan
   // reports the state it began with.
@@ -293,7 +294,7 @@ test("malformed output is reported, and failed scans retry without socket change
   await h.launch()
   await h.wait(s => s.status === "ready" && s.rows.length === 1, 5000, "ready")
   h.set("list.out", record(4242, 3000, "node") + "\n{truncated")
-  h.call("open")
+  h.call("refresh")
   let state = await h.wait(s => s.status === "error", 5000, "error")
   assert.match(state.scanError, /unrecognized Port Kill record.*Malformed/)
   assert.equal(state.stale, true)
@@ -305,7 +306,7 @@ test("malformed output is reported, and failed scans retry without socket change
   state = await h.wait(s => s.status === "ready", 5000, "recovered")
   assert.deepEqual(state.rows, [], "empty output is a valid empty list")
   h.set("list.exit", "1")
-  h.call("open")
+  h.call("refresh")
   await h.wait(s => s.status === "error", 5000, "backend failure")
   h.unset("list.exit")
   await h.wait(s => s.status === "ready", 5000, "recovered from backend failure by retrying")
@@ -335,7 +336,7 @@ for (const mode of ["terminal", "always"]) {
     fs.copyFileSync(path.join(h.dir, "bin", "port-kill-console"), path.join(h.dir, "missing"))
     await h.wait(s => s.widgetVisible && s.canAct, 5000, "actions enabled after installation")
     fs.unlinkSync(path.join(h.dir, "missing"))
-    h.call("open")
+    h.call("refresh")
     await h.wait(s => s.widgetVisible && !s.canAct && s.status === "missing", 5000, "disabled after removal")
   })
 }
@@ -361,7 +362,7 @@ test("dependency failures keep the widget visible without dependency tooltips", 
   h.unset("dependency-code")
   await h.wait(s => s.canAct && s.widgetVisible, 5000, "dependencies restored")
   h.set("list.exit", 1)
-  h.call("open")
+  h.call("refresh")
   await h.wait(s => s.status === "error" && s.widgetVisible, 5000, "ordinary error visible")
 })
 
@@ -387,7 +388,7 @@ test("a hung scan times out, frees the scheduler and recovers", { skip, timeout:
   await h.launch()
   await h.wait(s => s.status === "ready", 5000, "ready")
   h.set("list.sleep", "30")
-  h.call("open")
+  h.call("refresh")
   const started = Date.now()
   const state = await h.wait(s => s.status === "timeout", 8000, "timeout")
   assert.ok(Date.now() - started < 6000)
@@ -429,7 +430,7 @@ for (const command of ["list", "kill"]) {
     h.call("mode", "always")
     await h.wait(s => s.canAct, 5000, "actions enabled")
     h.set("stall", "1")
-    h.call(command === "list" ? "open" : "kill", ...(command === "list" ? [] : [3000]))
+    h.call(command === "list" ? "refresh" : "kill", ...(command === "list" ? [] : [3000]))
     await until(() => fs.existsSync(path.join(h.ctl, "attempts")), 2000, "stalled wrapper started")
     h.unset("stall")
     const state = await h.wait(s => command === "list" ? s.status === "timeout" : !s.busy,
@@ -448,7 +449,7 @@ test("a kill during a scan discards the scan's obsolete result", { skip, timeout
   await h.wait(s => s.status === "ready", 5000, "ready")
   h.set("list.out", record(1111, 3000, "obsolete"))
   h.set("list.sleep", "0.8")
-  h.call("open")
+  h.call("refresh")
   await until(() => h.calls().some(call => call.args === "--json" && Date.now() - call.at < 500), 2000, "slow scan to start")
   h.call("forceKill", 3000)
   h.set("list.out", record(2222, 3001, "current"))
@@ -457,14 +458,39 @@ test("a kill during a scan discards the scan's obsolete result", { skip, timeout
   assert.equal(h.calls("--ports 3000").length, 1)
 })
 
-test("opening the menu refreshes at once", { skip, timeout: 20000 }, async t => {
+test("opening the menu keeps fresh actions enabled and reuses an in-flight scan", { skip, timeout: 20000 }, async t => {
+  const h = harness(t, { maxAgeMs: 600000, mode: "always" });
+  h.set("list.out", record(1111, 3000, "server"));
+  await h.start();
+  await sleep(2000);
+  await h.wait(s => s.canAct, 5000, "ready");
+  const scans = h.calls().length;
+  for (let i = 0; i < 3; i++) {
+    h.call("open");
+    assert.equal(h.state().canAct, true);
+    assert.equal(h.state().refreshing, false);
+  }
+  await sleep(300);
+  assert.equal(h.calls().length, scans);
+  h.set("list.sleep", "0.7");
+  h.call("refresh");
+  await h.wait(s => s.refreshing, 2000, "explicit scan starts");
+  h.call("open");
+  h.call("open");
+  assert.equal(h.state().canAct, false);
+  await h.wait(s => s.canAct, 5000, "scan finishes");
+  await sleep(1000);
+  assert.equal(h.calls().length, scans + 1);
+});
+
+test("explicit refresh scans at once", { skip, timeout: 20000 }, async t => {
   const h = harness(t, { maxAgeMs: 600000 })
   await h.start()
   await h.launch()
   await h.wait(s => s.status === "ready", 5000, "ready")
   await sleep(2000)
   const scans = h.calls().length
-  h.call("open")
+  h.call("refresh")
   await until(() => h.calls().length > scans, 1000, "refresh scan")
   // Quiet sockets and a long maximum age: nothing else runs.
   await sleep(2000)
@@ -504,34 +530,52 @@ test("always active monitors without a terminal and switching back stops all wor
   assert.equal(h.calls().length, scans);
 });
 
-test("mode changes keep an existing terminal active and invalid settings use terminal mode", { skip, timeout: 20000 }, async t => {
+test("an unset monitoring mode starts without a terminal and Quit stops it", { skip, timeout: 20000 }, async t => {
+  const h = harness(t, { mode: "" });
+  await h.start();
+  await h.wait(s => s.active && s.widgetVisible && s.canAct, 6000, "default monitoring without a terminal");
+  assert.equal(h.state().monitoringMode, "always");
+  assert.equal(h.state().monitorCount, 0);
+  h.call("quit");
+  await h.wait(s => !s.active && !s.widgetVisible, 3000, "Quit hides the default widget");
+  await until(() => h.children().length === 0, 3000, "default monitoring stopped");
+  const scans = h.calls().length;
+  await sleep(1500);
+  assert.equal(h.calls().length, scans);
+  assert.equal(h.state().active, false);
+});
+
+test("mode changes keep an existing terminal active and invalid settings use always mode", { skip, timeout: 20000 }, async t => {
   const h = harness(t);
   await h.start();
   const monitor = await h.launch();
   await h.wait(s => s.active && s.status === "ready", 5000, "ready");
   h.call("mode", "always");
   await h.wait(s => s.active && s.monitoringMode === "always", 3000, "always mode");
+  h.call("mode", "terminal");
+  await h.wait(s => s.active && s.monitoringMode === "terminal", 3000, "explicit terminal mode");
   h.call("mode", "invalid");
-  await h.wait(s => s.monitoringMode === "terminal" && s.monitorCount === 1, 3000, "fallback with terminal");
+  await h.wait(s => s.monitoringMode === "always" && s.monitorCount === 1, 3000, "fallback with terminal");
   assert.equal(h.state().active, true);
   await stopMonitor(monitor);
-  await h.wait(s => !s.active, 3000, "last terminal closed");
+  await h.wait(s => s.monitorCount === 0, 3000, "last terminal closed");
+  assert.equal(h.state().active, true);
 });
 
-test("a menu refresh and the scan after an action block destructive actions", { skip, timeout: 25000 }, async t => {
+test("an explicit refresh and the scan after an action block destructive actions", { skip, timeout: 25000 }, async t => {
   const h = harness(t, { maxAgeMs: 600000 });
   await h.start();
   h.call("mode", "always");
   await h.wait(s => s.canAct, 6000, "initial ready");
   h.set("list.sleep", "0.7");
-  h.call("open");
-  await h.wait(s => s.refreshing, 2000, "menu scan starts");
+  h.call("refresh");
+  await h.wait(s => s.refreshing, 2000, "explicit scan starts");
   assert.equal(h.state().canAct, false);
   h.call("kill", 3000);
   h.call("killAll");
   assert.equal(h.calls("--ports").length, 0);
   assert.equal(h.calls("--kill-all").length, 0);
-  await h.wait(s => s.canAct, 6000, "menu scan ends");
+  await h.wait(s => s.canAct, 6000, "explicit scan ends");
   h.call("kill", 3000);
   await h.wait(s => !s.busy && s.refreshing, 3000, "post-action scan");
   assert.equal(h.state().canAct, false);
@@ -575,7 +619,7 @@ test("on-demand logs open once, reopen after closing, and end with the shell", {
   assert.equal(h.state().monitoringMode, "always");
   await until(() => h.watchers().length === 0 && !h.state().busy, 4000, "Quit stops watcher and action");
   const scans = h.calls().length;
-  h.call("open");
+  h.call("refresh");
   await sleep(300);
   assert.equal(h.calls().length, scans);
   // A newly launched registered monitor explicitly starts the plugin again.
@@ -624,7 +668,7 @@ test("right-click still opens one TUI during a refresh", { skip, timeout: 15000 
   h.call("mode", "always")
   await h.wait(s => s.canAct, 5000, "ready")
   h.set("list.sleep", "0.8")
-  h.call("open")
+  h.call("refresh")
   await h.wait(s => s.refreshing && !s.canAct && s.dependenciesAvailable, 2000, "refreshing")
   h.call("debug")
   await until(() => {

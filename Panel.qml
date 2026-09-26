@@ -122,7 +122,7 @@ Panel {
   onOpenedChanged: if (opened) {
     cursorIndex = 0
     menuFlick.contentY = 0
-    ports.refresh()
+    ports.refreshOnOpen()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
   onVisibleChanged: if (!visible && opened) close()
