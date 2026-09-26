@@ -9,6 +9,7 @@ These logs do not register as a user-started terminal monitor.
 import os
 import array
 import ctypes
+from contextlib import ExitStack, contextmanager
 import socket
 import struct
 import time
@@ -118,9 +119,10 @@ def stop_backend(child, fd):
     # Its PID therefore cannot be reused to name an unrelated process group.
     try:
         os.killpg(child.pid, signal.SIGTERM)
-        exited = select.poll()
-        exited.register(fd, select.POLLIN)
-        exited.poll(2000)
+        if fd is not None:
+            exited = select.poll()
+            exited.register(fd, select.POLLIN)
+            exited.poll(2000)
         os.killpg(child.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
@@ -130,19 +132,9 @@ def stop_backend(child, fd):
         raise RuntimeError("The log backend did not stop after SIGKILL") from error
 
 
-def own_locked(binary):
-    if focus_existing():
-        return 0
+@contextmanager
+def launch_terminal(address):
     identity = f"{os.getpid()}.{start_time(Path('/proc'), os.getpid())}"
-    address = f"portkill-{os.getuid()}-{uuid.uuid4().hex}"
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    # Linux abstract sockets disappear with their owner and need no pathname.
-    server.bind('\0' + address)
-    server.listen(1)
-    server.setblocking(False)
-    poller = select.poll()
-    poller.register(sys.stdin.fileno(), select.POLLIN)
-    poller.register(server.fileno(), select.POLLIN)
     command = [
         "xdg-terminal-exec", "--app-id=TUI.float", "--title=Port Kill logs", "--",
         sys.executable, str(Path(__file__).resolve()), "display", identity, address,
@@ -151,11 +143,74 @@ def own_locked(binary):
         (os.POSIX_SPAWN_OPEN, 0, "/dev/null", os.O_RDONLY, 0o600),
     ])
     launcher_fd = os.pidfd_open(launcher)
+    try:
+        yield launcher, launcher_fd
+    finally:
+        os.close(launcher_fd)
+
+
+@contextmanager
+def terminal_descriptors(connection):
+    connection.settimeout(2)
+    pid, uid, _ = struct.unpack('3i', connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+    if uid != os.getuid():
+        raise RuntimeError("Unexpected log terminal owner")
+    descriptors = array.array('i')
+    try:
+        message, ancillary, flags, _ = connection.recvmsg(16, socket.CMSG_SPACE(3 * descriptors.itemsize))
+        for level, kind, data in ancillary:
+            if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
+                descriptors.frombytes(data[:len(data) - len(data) % descriptors.itemsize])
+        if message != b'terminal' or len(descriptors) != 3 or flags & socket.MSG_CTRUNC:
+            raise RuntimeError("Could not connect the log terminal")
+        yield pid, descriptors
+    finally:
+        for fd in descriptors:
+            os.close(fd)
+
+
+@contextmanager
+def run_backend(binary, descriptors):
+    parent = os.getpid()
+    environment = os.environ.copy()
+    environment.setdefault("RUST_LOG", "warn")
+    # The controller owns the backend; the display only lends its tty.
+    backend = subprocess.Popen([binary], stdin=descriptors[0], stdout=descriptors[1],
+        stderr=descriptors[2], env=environment, start_new_session=True,
+        preexec_fn=lambda: child_setup(parent))
+    fd = None
+    try:
+        fd = os.pidfd_open(backend.pid)
+        yield fd
+    finally:
+        try:
+            stop_backend(backend, fd)
+        finally:
+            if fd is not None:
+                os.close(fd)
+
+
+def own_locked(binary):
+    if focus_existing():
+        return 0
+    with ExitStack() as resources:
+        return supervise_terminal(binary, resources)
+
+
+def supervise_terminal(binary, resources):
+    address = f"portkill-{os.getuid()}-{uuid.uuid4().hex}"
+    server = resources.enter_context(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM))
+    # Linux abstract sockets disappear with their owner and need no pathname.
+    server.bind('\0' + address)
+    server.listen(1)
+    server.setblocking(False)
+    poller = select.poll()
+    poller.register(sys.stdin.fileno(), select.POLLIN)
+    poller.register(server.fileno(), select.POLLIN)
+    launcher, launcher_fd = resources.enter_context(launch_terminal(address))
     poller.register(launcher_fd, select.POLLIN)
     connection = None
-    backend = None
     backend_fd = None
-    display_lease = None
     deadline = time.monotonic() + 10
 
     def interrupted(_signal, _frame):
@@ -179,38 +234,14 @@ def own_locked(binary):
                     poller.unregister(launcher_fd)
                 elif ready == server.fileno():
                     connection, _ = server.accept()
-                    connection.settimeout(2)
-                    pid, uid, _ = struct.unpack('3i', connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
-                    if uid != os.getuid():
-                        raise RuntimeError("Unexpected log terminal owner")
-                    descriptors = array.array('i')
-                    try:
-                        message, ancillary, flags, _ = connection.recvmsg(16, socket.CMSG_SPACE(3 * descriptors.itemsize))
-                        for level, kind, data in ancillary:
-                            if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
-                                descriptors.frombytes(data[:len(data) - len(data) % descriptors.itemsize])
-                        if message != b'terminal' or len(descriptors) != 3 or flags & socket.MSG_CTRUNC:
-                            raise RuntimeError("Could not connect the log terminal")
+                    resources.enter_context(connection)
+                    with terminal_descriptors(connection) as (pid, descriptors):
                         directory = lease_dir().parent / 'log-terminals'
                         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
                         display_lease = directory / f"{pid}.{start_time(Path('/proc'), pid)}"
                         display_lease.touch(mode=0o600)
-                        parent = os.getpid()
-                        # The macOS tray app does not enable INFO logging by
-                        # default. Keep console status output without its
-                        # internal scan chatter, unless the user chose a level.
-                        backend_environment = os.environ.copy()
-                        backend_environment.setdefault("RUST_LOG", "warn")
-                        # The controller owns the backend. The display only
-                        # lends its tty and holds a connection while visible.
-                        backend = subprocess.Popen([binary], stdin=descriptors[0],
-                            stdout=descriptors[1], stderr=descriptors[2],
-                            env=backend_environment,
-                            start_new_session=True, preexec_fn=lambda: child_setup(parent))
-                        backend_fd = os.pidfd_open(backend.pid)
-                    finally:
-                        for fd in descriptors:
-                            os.close(fd)
+                        resources.callback(display_lease.unlink, missing_ok=True)
+                        backend_fd = resources.enter_context(run_backend(binary, descriptors))
                     poller.unregister(server.fileno())
                     poller.register(connection.fileno(), select.POLLIN)
                     poller.register(backend_fd, select.POLLIN)
@@ -226,16 +257,6 @@ def own_locked(binary):
     finally:
         for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
             signal.signal(sig, signal.SIG_IGN)
-        if backend is not None:
-            stop_backend(backend, backend_fd)
-        if backend_fd is not None:
-            os.close(backend_fd)
-        if connection is not None:
-            connection.close()
-        if display_lease is not None:
-            display_lease.unlink(missing_ok=True)
-        server.close()
-        os.close(launcher_fd)
 
 
 def display(identity, address):

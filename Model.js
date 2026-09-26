@@ -99,8 +99,6 @@ function processCount(rows) {
   return count
 }
 
-// Port Kill's status icon: green when idle, orange for 1-9 processes, red for
-// 10 or more.
 function statusColor(count) {
   if (count <= 0) return "#00ff00"
   if (count <= 9) return "#ffa500"

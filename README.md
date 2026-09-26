@@ -1,12 +1,10 @@
 # Port Kill for Omarchy
 
-Find and free development ports from the Omarchy bar with
-[Port Kill](https://portkill.com/).
+An Omarchy bar plugin for [Port Kill](https://github.com/treadiehq/port-kill).
+See which processes are using development ports, stop them from the menu,
+and open the terminal monitor with a right-click.
 
 ![Port Kill bar icon and menu with example development servers](preview.png)
-
-An independent integration of [Port Kill](https://github.com/treadiehq/port-kill)
-with an Omarchy menu, live status colors, and terminal activity logs.
 
 ## Requirements
 
@@ -26,13 +24,13 @@ with an Omarchy menu, live status colors, and terminal activity logs.
 omarchy plugin add https://github.com/jesusarchive/omarchy-port-kill.git --enable
 ```
 
-The default mode follows Port Kill terminals started through either integration
-below. To use the bar without a terminal, select **Always active** in the
-plugin settings in the bar editor.
+By default, the icon appears while Port Kill is running through the launcher
+or Bash integration below. Set up either one, or select **Always active** in
+the plugin settings in the bar editor to monitor without a terminal.
 
 ### App launcher
 
-Add a Port Kill launcher entry. This replaces an existing entry with that name:
+Add a launcher entry, replacing any existing entry named Port Kill:
 
 ```bash
 omarchy tui install "Port Kill" "bash $HOME/.config/omarchy/plugins/jesusarchive.port-kill/portkill.sh launch" float \
@@ -48,8 +46,8 @@ add this line to `~/.bashrc`, then open a new terminal:
 [[ -r "$HOME/.config/omarchy/plugins/jesusarchive.port-kill/port-kill.bash" ]] && source "$HOME/.config/omarchy/plugins/jesusarchive.port-kill/port-kill.bash"
 ```
 
-For an already open Bash terminal, run the same line once. This integration
-leaves the installed binaries and commands run by other programs unchanged.
+To use it in an already open Bash terminal, run the same line once.
+This defines shell functions; the installed binaries are unchanged.
 
 ## Use
 
@@ -62,10 +60,9 @@ focus an existing Port Kill terminal. Repeated right-clicks reuse that window.
 | Kill: Port N: process | Ask Port Kill to free that port. |
 | Quit | Stop monitoring, close terminals tracked by the plugin, and hide the icon. Development servers keep running. |
 
-Kill actions take effect immediately without confirmation. Port Kill resolves
-the port when the action runs, so the target can change after the menu was
-refreshed. The menu shows one process per port; stopping a process also closes
-any other ports it owns. Failed or timed-out actions are not retried automatically.
+Kill actions run immediately, without confirmation or automatic retries.
+They target the processes using the port at that moment. Stopping a process
+also closes any other ports it owns.
 
 The icon's center is green for no processes, orange for 1 to 9, and red for
 10 or more. Grey indicates startup, a monitoring error, or a failed port action.
@@ -74,23 +71,23 @@ refreshing or invalid.
 
 ## Settings
 
-Configure both preferences in the plugin settings in the bar editor:
+Open the plugin settings in the bar editor:
 
 | Setting | Options |
 | --- | --- |
-| When to monitor | **Follow terminal**, the default, shows the icon while a terminal started through the launcher or Bash integration is running. **Always active** keeps monitoring without a terminal. |
-| Check interval | Seconds between bar checks, from 1 to 300. Default: **2**. This does not change the terminal monitor's interval. |
+| When to monitor | **Follow terminal** (default) monitors while a tracked Port Kill terminal is running. **Always active** monitors without a terminal. |
+| Check interval | Seconds between checks for port changes, from 1 to 300. Default: **2**. The terminal monitor uses its own interval. |
 
 Closing the last tracked terminal stops Follow terminal mode. In Always active
 mode, closing a terminal leaves monitoring and the icon running. A separate log
 window opened by right-click does not keep Follow terminal mode active on its own.
 
-**Quit stops either mode.** To resume, launch Port Kill through an integration
+Quit stops either mode. To resume, launch Port Kill through an integration
 above, change monitoring mode, or reload the plugin. If Quit fails, the icon
 stays visible with an error so you can retry.
 
-Commands such as `port-kill 3000`, `--json`, and `--kill-all` run once and do not
-activate Follow terminal mode. Terminal filters such as `--ports 3000` apply
+Commands such as `port-kill 3000`, `port-kill --json`, and `port-kill --kill-all`
+run once and do not activate Follow terminal mode. Filters such as `--ports 3000` apply
 only to that terminal. The bar continues to use ports 2000 through 9000.
 
 ## Keyboard controls
@@ -107,12 +104,12 @@ only to that terminal. The bar continues to use ports 2000 through 9000.
 
 ## Troubleshooting
 
-- **No icon:** in Follow terminal mode, start Port Kill through the launcher or
+- If the icon is missing in Follow terminal mode, start Port Kill through the launcher or
   Bash integration above. Direct binary launches are not tracked.
-- **Logs do not open:** read the tooltip and check your default terminal.
+- If logs do not open, read the tooltip and check your default terminal.
   If an existing terminal cannot be identified, the plugin reports it instead
   of opening a duplicate.
-- **An action fails:** read the tooltip, check the requirements, and retry once
+- If an action fails, read the tooltip, check the requirements, and retry once
   the list has refreshed.
 
 ## Update

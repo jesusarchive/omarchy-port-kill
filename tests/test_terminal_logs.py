@@ -1,9 +1,11 @@
 import os
+import array
 import json
 from unittest.mock import patch
 from pathlib import Path
 import select
 import signal
+import socket
 import subprocess
 import shutil
 import sys
@@ -18,6 +20,53 @@ from monitors import start_time
 
 
 class TerminalLogsTests(unittest.TestCase):
+    def test_handshake_releases_fds_on_success_and_invalid_messages(self):
+        for message, count in ((b'terminal', 3), (b'wrong', 3), (b'terminal', 1), (b'terminal', 4)):
+            sender, receiver = socket.socketpair()
+            with self.subTest(message=message, count=count), sender, receiver, open('/dev/null') as stream:
+                descriptors = array.array('i', [stream.fileno()] * count)
+                sender.sendmsg([message], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, descriptors)])
+                before = len(os.listdir('/proc/self/fd'))
+                if message == b'terminal' and count == 3:
+                    with terminal_logs.terminal_descriptors(receiver) as (pid, received):
+                        self.assertEqual(pid, os.getpid())
+                        for fd in received:
+                            os.fstat(fd)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'Could not connect'):
+                        with terminal_logs.terminal_descriptors(receiver):
+                            self.fail('invalid handshake accepted')
+                self.assertEqual(len(os.listdir('/proc/self/fd')), before)
+
+    def test_backend_is_reaped_if_pidfd_creation_fails(self):
+        children = []
+        popen = subprocess.Popen
+
+        def start_child(*args, **kwargs):
+            child = popen(*args, **kwargs)
+            children.append(child)
+            return child
+
+        with open('/dev/null', 'r+') as stream, \
+             patch.object(terminal_logs.subprocess, 'Popen', side_effect=start_child), \
+             patch.object(terminal_logs.os, 'pidfd_open', side_effect=OSError('no pidfd')):
+            with self.assertRaisesRegex(OSError, 'no pidfd'):
+                with terminal_logs.run_backend('/usr/bin/cat', [stream.fileno()] * 3):
+                    self.fail('backend started without a pidfd')
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].returncode)
+        self.assertFalse(Path(f'/proc/{children[0].pid}').exists())
+
+    def test_launcher_start_failure_closes_listener(self):
+        with open('/dev/null') as stream, \
+             patch.object(terminal_logs, 'focus_existing', return_value=False), \
+             patch.object(terminal_logs.sys, 'stdin', stream), \
+             patch.object(terminal_logs.os, 'posix_spawnp', side_effect=FileNotFoundError('no terminal')):
+            before = len(os.listdir('/proc/self/fd'))
+            with self.assertRaisesRegex(FileNotFoundError, 'no terminal'):
+                terminal_logs.own_locked('/usr/bin/cat')
+            self.assertEqual(len(os.listdir('/proc/self/fd')), before)
+
     def test_first_launch_does_not_write_into_plugin_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

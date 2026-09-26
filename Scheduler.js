@@ -2,7 +2,7 @@
 // cheap socket signatures from the watcher trigger them, and this state
 // machine serializes, coalesces and rate-limits the requests. QML loads this
 // file, and Node.js runs the same functions in tests. Times are milliseconds
-// from any monotonic clock.
+// from the same clock.
 
 var DEFAULTS = {
   // Background requests (socket changes) start at most this often.

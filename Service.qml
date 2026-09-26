@@ -9,7 +9,6 @@ Item {
 
   property var settings: ({})
   property var rows: []
-  // Monitoring can follow registered terminals or run whenever enabled.
   property bool active: false
   property bool stoppedByUser: false
   property bool quitting: false
@@ -31,7 +30,6 @@ Item {
 
   readonly property string monitoringMode: setting("monitoringMode", "terminal") === "always" ? "always" : "terminal"
   readonly property bool alwaysActive: monitoringMode === "always"
-  property bool logTerminalRequested: false
   property bool initialized: false
   property bool refreshRequired: true
   readonly property bool refreshing: scanProcess.running
@@ -82,7 +80,7 @@ Item {
     return value.length > 160 ? value.substring(0, 157) + "..." : value
   }
 
-  // Monitor tracking --------------------------------------------------------
+  // Monitor tracking
 
   // Called at shell startup, when a monitor starts and on explicit refresh.
   // A running watcher rereads its leases; otherwise start one, which reports
@@ -131,8 +129,7 @@ Item {
       pump()
       return
     }
-    logTerminalRequested = false
-    updateTerminalLogs()
+    logTerminal.close()
     Scheduler.deactivate(schedule)
     // Stop background work now; the result would be discarded anyway.
     if (scanProcess.running) scanProcess.signal(15)
@@ -182,7 +179,7 @@ Item {
     }
   }
 
-  // Scans ---------------------------------------------------------------------
+  // Scans
 
   function refresh() {
     refreshRequired = true
@@ -210,9 +207,7 @@ Item {
     scanProcess.environment = { "PORT_KILL_SCAN_TIMEOUT": String(scanTimeoutSec) }
     scanProcess.command = ["bash", portKillScript, "list"]
     scanProcess.running = true
-    scanWatchdog.stage = 0
-    scanWatchdog.interval = (scanTimeoutSec + 2) * 1000 + watchdogGraceMs
-    scanWatchdog.restart()
+    scanWatchdog.arm()
   }
 
   function finishScan(exitCode, stdout, stderr) {
@@ -255,7 +250,7 @@ Item {
     }
   }
 
-  // Actions -------------------------------------------------------------------
+  // Actions
 
   // Port Kill stops the listeners it finds on this port when the action
   // runs, which may include processes other than row.pid.
@@ -271,28 +266,7 @@ Item {
 
   function openTerminalLogs() {
     if (quitting || !active) return
-    if (terminalProcess.running && terminalProcess.stdinEnabled) {
-      if (!focusTerminalProcess.running) {
-        terminalError = ""
-        focusTerminalProcess.running = true
-      }
-      return
-    }
-    logTerminalRequested = true
-    updateTerminalLogs()
-  }
-
-  function updateTerminalLogs() {
-    if (logTerminalRequested) {
-      if (!terminalProcess.running) {
-        terminalError = ""
-        terminalProcess.stdinEnabled = true
-        terminalProcess.running = true
-      }
-    } else if (terminalProcess.running) {
-      // Closing stdin ends the controller; its terminal follows via pidfd.
-      terminalProcess.stdinEnabled = false
-    }
+    logTerminal.open()
   }
 
   function quit() {
@@ -303,8 +277,7 @@ Item {
     quitError = ""
     quitGeneration = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)
     pendingStart = ""
-    logTerminalRequested = false
-    updateTerminalLogs()
+    logTerminal.close()
     watcherRetry.stop()
     watcherRestarting = false
     watcherRescanRequested = false
@@ -317,7 +290,7 @@ Item {
   }
 
   function finishQuit() {
-    if (!quitting || !quitCommandDone || terminalProcess.running) return
+    if (!quitting || !quitCommandDone || logTerminal.running) return
     quitting = false
     if (quitError) {
       actionError = quitError
@@ -362,9 +335,7 @@ Item {
     actionProcess.environment = { "PORT_KILL_ACTION_TIMEOUT": String(actionTimeoutSec) }
     actionProcess.command = command
     actionProcess.running = true
-    actionWatchdog.stage = 0
-    actionWatchdog.interval = (actionTimeoutSec + 2) * 1000 + watchdogGraceMs
-    actionWatchdog.restart()
+    actionWatchdog.arm()
   }
 
   function finishAction(exitCode, stderr) {
@@ -432,40 +403,21 @@ Item {
     onTriggered: root.reconcile()
   }
 
-  // If a command outlives its deadline plus portkill.sh's own kill grace,
-  // ask it to stop, then force it. Only the scan or action result is
-  // abandoned; the scheduler and busy state recover either way.
-  Timer {
+  CommandWatchdog {
     id: scanWatchdog
-    property int stage: 0
-    repeat: false
-    onTriggered: {
-      if (stage === 0) {
-        stage = 1
-        scanProcess.signal(15)
-        interval = 2000
-        restart()
-        return
-      }
-      scanProcess.signal(9)
+    targetProcess: scanProcess
+    deadlineMs: (root.scanTimeoutSec + 2) * 1000 + root.watchdogGraceMs
+    onTimedOut: {
       root.scanAbandoned = true
       root.finishScan(-1, "", "Port Kill did not finish within " + root.scanTimeoutSec + " seconds")
     }
   }
 
-  Timer {
+  CommandWatchdog {
     id: actionWatchdog
-    property int stage: 0
-    repeat: false
-    onTriggered: {
-      if (stage === 0) {
-        stage = 1
-        actionProcess.signal(15)
-        interval = 2000
-        restart()
-        return
-      }
-      actionProcess.signal(9)
+    targetProcess: actionProcess
+    deadlineMs: (root.actionTimeoutSec + 2) * 1000 + root.watchdogGraceMs
+    onTimedOut: {
       root.actionAbandoned = true
       root.finishAction(-1, "Port Kill did not finish within " + root.actionTimeoutSec + " seconds")
     }
@@ -485,31 +437,15 @@ Item {
     }
   }
 
-  Process {
-    id: focusTerminalProcess
-    command: ["bash", root.portKillScript, "logs-focus"]
-    running: false
-    stderr: StdioCollector { id: focusTerminalStderr; waitForEnd: true }
-    onExited: function(exitCode) {
-      if (exitCode !== 0 && focusTerminalStderr.text)
-        root.terminalError = root.elide(focusTerminalStderr.text)
-    }
-  }
-
-  Process {
-    id: terminalProcess
-    command: ["bash", root.portKillScript, "logs"]
-    stdinEnabled: true
-    running: false
-    stderr: StdioCollector { id: terminalStderr; waitForEnd: true }
-    onExited: function(exitCode) {
-      if (exitCode !== 0 && (root.logTerminalRequested || root.quitting)) {
-        root.terminalError = root.elide(terminalStderr.text || (root.quitting ? "Could not close the log terminal" : "Could not open the log terminal"))
-        if (root.quitting) root.quitError = root.terminalError
+  LogTerminal {
+    id: logTerminal
+    scriptPath: root.portKillScript
+    onErrorReported: function(message) { root.terminalError = root.elide(message) }
+    onFinished: function(exitCode, stderr) {
+      if (exitCode !== 0 && root.quitting) {
+        root.terminalError = root.elide(stderr || "Could not close the log terminal")
+        root.quitError = root.terminalError
       }
-      // A new request may arrive while the old controller exits.
-      if (!stdinEnabled && root.logTerminalRequested) Qt.callLater(root.updateTerminalLogs)
-      else root.logTerminalRequested = false
       root.finishQuit()
     }
   }

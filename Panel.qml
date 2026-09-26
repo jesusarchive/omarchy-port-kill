@@ -116,7 +116,6 @@ Panel {
     return ports.socketError ? text + ". Change detection failed: " + ports.socketError : text
   }
 
-  // Both modes keep the same live status colors, including green when empty.
   visible: ports.active
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight

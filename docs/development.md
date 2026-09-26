@@ -5,7 +5,9 @@
 | File | Role |
 | --- | --- |
 | `Panel.qml` | Icon, tooltip, menu, keyboard actions, and right-click log access. |
-| `Service.qml` | Monitoring state, scan and action processes, terminal ownership, and Quit. |
+| `Service.qml` | Monitoring state, scan and action processes, and Quit. |
+| `LogTerminal.qml` | Opens or focuses logs and waits for a closing controller before reopening. |
+| `CommandWatchdog.qml` | Escalates a stalled command from TERM to KILL if its wrapper's deadline fails. |
 | `Model.js` | Parses Port Kill output and watcher events; builds rows and status colors. |
 | `Scheduler.js` | Serializes scans, limits background scan frequency, retries failed scans, and discards obsolete results. |
 | `portkill.sh` | Finds Port Kill, registers foreground monitors, and bounds scans and kill commands. |
@@ -90,6 +92,10 @@ passes terminal file descriptors over a private Unix socket. The controller
 starts Port Kill on those descriptors and watches the display connection,
 backend, launcher, and the service's stdin. A terminal that never connects times
 out after 10 seconds.
+
+The Python controller keeps terminal launch, descriptor validation, and backend
+ownership in separate context managers. An `ExitStack` releases acquired
+resources on startup failures as well as normal exit.
 
 Closing the window or the service's input stops the backend process group.
 Linux parent-death signaling kills the backend if its controller dies abruptly.

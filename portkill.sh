@@ -4,16 +4,6 @@
 # SIGTERM/SIGKILL sequence; this script finds the binary, registers terminal
 # monitors so the bar can show its icon, and bounds background commands.
 #
-#   portkill.sh launch                  Run a registered port-kill-console monitor
-#   portkill.sh run <binary> [args...]  Run port-kill or port-kill-console; register
-#                                       it only when the arguments start a monitor
-#   portkill.sh list                    Print one scan's stdout
-#   portkill.sh kill <port>
-#   portkill.sh kill-all
-#   portkill.sh quit                    Stop registered monitors
-#   portkill.sh watch [interval] [mode] Report monitors and socket changes
-#   portkill.sh logs                    Own a log terminal until stdin closes
-#
 # Exit codes: 0 ok, 1 Port Kill failed, 2 usage, 3 Port Kill or Python
 # missing, 4 lsof missing, 6 Port Kill timed out.
 

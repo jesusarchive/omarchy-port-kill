@@ -121,7 +121,7 @@ def main():
     work = Path(tempfile.mkdtemp(prefix="portkill-measure-"))
     config = work / "config"
     config.mkdir()
-    for name in ["Service.qml", "Model.js", "Scheduler.js", "portkill.sh", "monitors.py"]:
+    for name in ["Service.qml", "LogTerminal.qml", "CommandWatchdog.qml", "Model.js", "Scheduler.js", "portkill.sh", "monitors.py"]:
         shutil.copy(ROOT / name, config / name)
     config.joinpath("shell.qml").write_text(SHELL_QML)
     bin_dir = work / "bin"

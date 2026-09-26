@@ -38,7 +38,7 @@ function harness(t, { maxAgeMs = 4000, backendMissing = false } = {}) {
   const bin = path.join(dir, "bin")
   const ctl = path.join(dir, "ctl")
   for (const d of [config, bin, ctl]) fs.mkdirSync(d)
-  for (const file of ["Service.qml", "Model.js", "Scheduler.js", "portkill.sh", "monitors.py", "terminal_logs.py"]) {
+  for (const file of ["Service.qml", "LogTerminal.qml", "CommandWatchdog.qml", "Model.js", "Scheduler.js", "portkill.sh", "monitors.py", "terminal_logs.py"]) {
     fs.copyFileSync(path.join(root, file), path.join(config, file))
   }
   fs.writeFileSync(path.join(config, "shell.qml"), fs.readFileSync(path.join(__dirname, "qml", "shell.qml"), "utf8")
@@ -350,6 +350,35 @@ test("a hung action times out, releases the menu and is not retried", { skip, ti
   await h.wait(s => s.canAct, 5000, "actions enabled again")
 })
 
+for (const command of ["list", "kill"]) {
+  test(`QML watchdog recovers when the ${command} wrapper ignores termination`, { skip, timeout: 25000 }, async t => {
+    const h = harness(t)
+    const script = path.join(h.config, "portkill.sh")
+    fs.renameSync(script, path.join(h.config, "original.sh"))
+    writeExecutable(script, [
+      `if [[ $1 == ${command} && -f '${h.ctl}/stall' ]]; then`,
+      `  echo attempt >> '${h.ctl}/attempts'`,
+      // A single process ignores TERM; only the QML watchdog can stop it.
+      `  exec python3 -c 'import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'`,
+      'fi',
+      `exec bash '${h.config}/original.sh' "$@"`
+    ])
+    await h.start()
+    h.call("mode", "always")
+    await h.wait(s => s.canAct, 5000, "actions enabled")
+    h.set("stall", "1")
+    h.call(command === "list" ? "open" : "kill", ...(command === "list" ? [] : [3000]))
+    await until(() => fs.existsSync(path.join(h.ctl, "attempts")), 2000, "stalled wrapper started")
+    h.unset("stall")
+    const state = await h.wait(s => command === "list" ? s.status === "timeout" : !s.busy,
+      9000, "watchdog timeout")
+    assert.match(command === "list" ? state.scanError : state.actionError, /did not finish within/)
+    if (command === "kill") assert.match(state.actionError, /not retried/)
+    await h.wait(s => s.canAct, 5000, "recovered")
+    assert.equal(fs.readFileSync(path.join(h.ctl, "attempts"), "utf8").trim(), "attempt")
+  })
+}
+
 test("a kill during a scan discards the scan's obsolete result", { skip, timeout: 30000 }, async t => {
   const h = harness(t, { maxAgeMs: 600000 })
   await h.start()
@@ -464,6 +493,7 @@ test("on-demand logs open once, reopen after closing, and end with the shell", {
   await h.start();
   h.call("mode", "always");
   assert.equal(pid(), 0);
+  await h.wait(s => s.active, 4000, "monitoring active");
   h.call("debug");
   await until(pid, 4000, "debug terminal opened");
   const first = pid();
@@ -606,7 +636,10 @@ test("an abruptly killed log display leaves no backend and can be reopened", { s
     'while [[ $# -gt 0 && $1 != -- ]]; do shift; done', 'shift',
     `"$@" > '${h.ctl}/terminal.log' 2>&1 &`, 'exit 0'
   ]);
-  await h.start(); h.call("mode", "always"); h.call("debug");
+  await h.start();
+  h.call("mode", "always");
+  await h.wait(s => s.active, 4000, "monitoring active");
+  h.call("debug");
   const log = path.join(h.ctl,"terminal.log");
   const backendPid = () => { try { return Number(fs.readFileSync(log,"utf8").trim().split(" ")[1]); } catch { return 0; } };
   await until(backendPid, 4000, "log backend");

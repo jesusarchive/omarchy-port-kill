@@ -24,6 +24,9 @@ These changes target plugin version 0.4.0.
 
 ### Lifecycle and failure handling
 
+- Extracted QML log-window control and shared command watchdogs. Split Python
+  terminal startup and cleanup into context managers, including cleanup when
+  backend pidfd creation fails. Monitoring modes and port actions are unchanged.
 - Removed Bash's internal command dump when Quit terminates a registered
   monitor. Backend diagnostics and exit status are preserved; other abnormal
   exits retain a short status message.
