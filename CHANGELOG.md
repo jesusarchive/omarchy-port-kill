@@ -21,6 +21,9 @@ These changes target plugin version 0.4.0.
 
 ### Lifecycle and failure handling
 
+- Disabled Python bytecode writes in the log helper. The first right-click no
+  longer creates a cache file inside the plugin directory and triggers Omarchy's
+  plugin hot reload.
 - Replaced monitor process-name matching with registered process identities and
   Linux pidfds. The watcher discovers existing monitors after a shell restart.
 - Added session generations so delayed launch notifications cannot undo Quit.

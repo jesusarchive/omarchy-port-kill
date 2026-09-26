@@ -68,6 +68,11 @@ Linux parent-death signaling kills the backend if its controller dies abruptly.
 The display also watches its owner, including when a terminal launcher detaches.
 Plugin-created log windows do not register as manual monitors.
 
+The log helper disables Python bytecode writes before importing local modules.
+Omarchy watches the installed plugin directory, so creating `__pycache__` there
+would reload the plugin during the first right-click. Runtime state belongs in
+the runtime directory, never alongside plugin source files.
+
 ## Quit and recovery
 
 Quit stops new scans, cancels current scanning, closes the plugin-created log

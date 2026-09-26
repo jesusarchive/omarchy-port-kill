@@ -5,6 +5,7 @@ from pathlib import Path
 import select
 import signal
 import subprocess
+import shutil
 import sys
 import tempfile
 import time
@@ -17,6 +18,25 @@ from monitors import start_time
 
 
 class TerminalLogsTests(unittest.TestCase):
+    def test_first_launch_does_not_write_into_plugin_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plugin = root / 'plugin'
+            plugin.mkdir()
+            for name in ('terminal_logs.py', 'monitors.py'):
+                shutil.copy(ROOT / name, plugin / name)
+            before = sorted(path.relative_to(plugin) for path in plugin.rglob('*'))
+            env = {**os.environ, 'PORT_KILL_STATE_DIR': str(root / 'state')}
+            env.pop('PYTHONDONTWRITEBYTECODE', None)
+            env.pop('PYTHONPYCACHEPREFIX', None)
+            result = subprocess.run(
+                [sys.executable, str(plugin / 'terminal_logs.py'), 'focus'],
+                env=env, capture_output=True, text=True, timeout=5,
+            )
+            self.assertEqual(result.returncode, 1, result.stderr)  # No existing TUI.
+            self.assertEqual(result.stderr, '')
+            self.assertEqual(sorted(path.relative_to(plugin) for path in plugin.rglob('*')), before)
+
     def start(self, delay=0, ignore_term=False, launch_code=None):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)

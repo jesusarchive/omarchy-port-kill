@@ -22,6 +22,10 @@ import signal
 import subprocess
 import sys
 
+# Omarchy watches the plugin directory for changes. A first-time local import
+# must not create __pycache__ and reload the shell while opening the terminal.
+sys.dont_write_bytecode = True
+
 from monitors import lease_dir, lease_names, open_lease, require_pidfd, start_time
 
 
