@@ -16,6 +16,34 @@
 
 ## Monitor registration
 
+### Terminal integration
+
+For shells other than Bash, start a tracked monitor explicitly:
+
+```bash
+bash ~/.config/omarchy/plugins/jesusarchive.port-kill/portkill.sh launch
+```
+
+The Bash integration defines shell functions without replacing binaries on
+PATH. No-argument calls and supported monitor options register a monitor.
+These include `--ports`, `--start-port`, `--end-port`, `--ignore-*`, `--docker`,
+and `--verbose`. Other invocations pass directly to the binary. See
+`starts_monitor` in `portkill.sh` for the full supported option list.
+
+Plugin launcher sessions and newly created right-click log windows default to
+`RUST_LOG=warn`. This reduces internal INFO logging while keeping the backend's
+normal status output, warnings, and errors. Explicit logging preferences are
+respected. The Bash `run` path and existing terminals keep their own logging
+behavior. Log windows show Port Kill activity, not the shell's diagnostic log.
+
+Unloading the plugin closes its own log window but leaves manually launched
+monitors running. A shell restart discovers their leases. Closing a terminal or
+pressing Ctrl+C releases its lease. Removing the Bash source line takes effect
+in new shells; already loaded functions fall back to the binary if the plugin
+script has been removed.
+
+### Process identities
+
 The launcher and Bash integration record the monitor's PID and Linux process
 start time in `$XDG_RUNTIME_DIR/omarchy-port-kill/monitors/`. The fallback runtime
 root is `/run/user/$UID`. Each lease contains a session generation. Registration
@@ -86,6 +114,20 @@ Quit retry available, with scanning and port-kill actions stopped. A delayed
 start notification from the old session cannot resume monitoring. A fresh
 registered launch can resume it only after its identity and generation validate.
 Changing monitoring mode or restarting the plugin also clears the stopped state.
+Changing only the check interval does not resume a stopped session.
+
+## Settings schema
+
+User preferences are edited through plugin settings in the bar editor. The
+manifest stores them as follows:
+
+| Key | Values | Default |
+| --- | --- | --- |
+| `monitoringMode` | `terminal` or `always` | `terminal` |
+| `refreshIntervalSec` | Integer, 1 through 300 | `2` |
+
+There is no terminal-visibility setting. Right-click opens or focuses logs on
+demand. The service retries failed scans, but never retries a kill action.
 
 ## Automated checks
 
