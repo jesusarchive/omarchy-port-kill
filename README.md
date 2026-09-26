@@ -121,7 +121,7 @@ only to that terminal. The bar continues to use ports 2000 through 9000.
 omarchy plugin update jesusarchive.port-kill
 ```
 
-Saved settings are preserved. See the [changelog](CHANGELOG.md) for changes.
+Saved settings are preserved.
 If an older launcher runs `port-kill-console` directly, recreate it using the
 command above to enable terminal tracking.
 
