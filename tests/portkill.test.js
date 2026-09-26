@@ -130,7 +130,7 @@ test("launch preserves console output, exit status and environment", t => {
 test("launch keeps the terminal for the console", t => {
   const env = fakeEnv(t)
   writeExecutable(env.consolePath, [
-    "[[ -t 0 && -t 1 ]] && echo tty || echo no-tty",
+    "[[ -t 0 && -t 1 && -t 2 ]] && echo tty || echo no-tty",
     "read -r line && echo \"read $line\""
   ])
   const result = spawnSync("script", ["-qec", `bash ${script} launch`, "/dev/null"], {
@@ -164,6 +164,21 @@ test("launch still runs without the Omarchy shell or Python", t => {
   assert.match(result.stdout, /Creating ProcessMonitor/)
 })
 
+test("Quit preserves backend stderr without dumping the monitor wrapper", async t => {
+  const env = fakeEnv(t)
+  monitorConsole(env, ['echo "backend diagnostic" >&2'])
+  const child = tracked(t, env)
+  let stderr = ""
+  child.stderr.on("data", chunk => { stderr += chunk })
+  await firstLine(child.stdout)
+  const closed = once(child, "close")
+  const result = env.run(["quit"])
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(await closed, [143, null])
+  assert.equal(stderr, "backend diagnostic\n")
+  assert.deepEqual(env.leases(), [])
+})
+
 test("Ctrl+C stops the monitor as if run directly and removes its lease", async t => {
   const env = fakeEnv(t)
   for (const [handler, expected] of [
@@ -187,11 +202,14 @@ test("a crashed monitor's status is passed on and its lease removed", async t =>
   const env = fakeEnv(t)
   monitorConsole(env)
   const child = tracked(t, env)
+  let stderr = ""
+  child.stderr.on("data", chunk => { stderr += chunk })
   const pid = Number((await firstLine(child.stdout)).split(" ")[1])
   await until(() => env.leases().length === 1, 2000, "lease")
-  const exited = once(child, "exit")
+  const exited = once(child, "close")
   process.kill(pid, "SIGKILL")
   assert.deepEqual(await exited, [137, null])
+  assert.equal(stderr, "Port Kill monitor exited with status 137\n")
   assert.deepEqual(env.leases(), [])
 })
 

@@ -110,29 +110,40 @@ run_monitor() {
   trap 'signal=INT' INT
   trap 'signal=TERM' TERM
   trap 'signal=HUP' HUP
-  (
-    stat=$(<"/proc/$BASHPID/stat")
-    read -ra fields <<<"${stat##*) }"
-    lease=$leases/$BASHPID.${fields[19]}
-    {
-      flock -x 9 || exit 1
-      generation_file=$(state_dir)/generation
-      generation=""
-      [[ -r $generation_file ]] && generation=$(<"$generation_file")
-      printf '%s\n' "$generation" >"$lease"
-    } 9>"$(state_dir)/registration.lock"
-    # Detach the notification so it neither delays Port Kill nor becomes its
-    # child.
-    (notify_bar started "${lease##*/}" </dev/null >/dev/null 2>&1 &)
-    # Undo this script's own SHLVL increment.
-    if ((SHLVL > 1)); then
-      export SHLVL=$((SHLVL - 1))
-    else
-      unset SHLVL
-    fi
-    exec "$binary" "$@"
-  )
-  status=$?
+  # Bash otherwise prints the entire subshell when Quit terminates it.
+  # Silence only that parent-shell notice; the backend keeps the real stderr.
+  local monitor_stderr
+  exec {monitor_stderr}>&2
+  {
+    (
+      stat=$(<"/proc/$BASHPID/stat")
+      read -ra fields <<<"${stat##*) }"
+      lease=$leases/$BASHPID.${fields[19]}
+      {
+        flock -x 9 || exit 1
+        generation_file=$(state_dir)/generation
+        generation=""
+        [[ -r $generation_file ]] && generation=$(<"$generation_file")
+        printf '%s\n' "$generation" >"$lease"
+      } 9>"$(state_dir)/registration.lock"
+      # Detach the notification so it neither delays Port Kill nor becomes its
+      # child.
+      (notify_bar started "${lease##*/}" </dev/null >/dev/null 2>&1 &)
+      # Undo this script's own SHLVL increment.
+      if ((SHLVL > 1)); then
+        export SHLVL=$((SHLVL - 1))
+      else
+        unset SHLVL
+      fi
+      exec "$binary" "$@"
+    ) 2>&"$monitor_stderr" {monitor_stderr}>&-
+    status=$?
+  } 2>/dev/null
+  exec {monitor_stderr}>&-
+  case $status in
+    129|130|143) ;; # Expected HUP, Ctrl+C, or Quit.
+    *) ((status > 128)) && printf 'Port Kill monitor exited with status %s\n' "$status" >&2 ;;
+  esac
   cleanup_leases "$leases"
   # When Port Kill died from the terminal's signal, die from it too, as the
   # shell would report for Port Kill run directly.

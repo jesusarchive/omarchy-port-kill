@@ -21,6 +21,9 @@ These changes target plugin version 0.4.0.
 
 ### Lifecycle and failure handling
 
+- Removed Bash's internal command dump when Quit terminates a registered
+  monitor. Backend diagnostics and exit status are preserved; other abnormal
+  exits retain a short status message.
 - Disabled Python bytecode writes in the log helper. The first right-click no
   longer creates a cache file inside the plugin directory and triggers Omarchy's
   plugin hot reload.
