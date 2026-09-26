@@ -5,7 +5,7 @@
   "version": "0.4.0",
   "author": "jesusarchive",
   "license": "MIT",
-  "description": "Free up development ports from the Omarchy bar.",
+  "description": "Port Kill integration for Omarchy.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Port Kill",
-    "description": "Free up development ports from the Omarchy bar.",
+    "description": "Find and kill processes using your development ports.",
     "category": "System",
     "aliases": [
       "ports",
