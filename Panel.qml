@@ -17,7 +17,7 @@ Panel {
   readonly property int quitIndex: itemCount - 1
   // Grey means the list is not current: the first scan is pending, the last
   // one failed, or an action failed.
-  readonly property bool hasError: !ports.ready || ports.actionError !== "" || ports.socketError !== "" || ports.watchError !== ""
+  readonly property bool hasError: !ports.dependenciesAvailable || !ports.ready || ports.actionError !== "" || ports.socketError !== "" || ports.watchError !== ""
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   // The menu clips its rows; keep them 1px inside so the cursor border on the
@@ -131,7 +131,6 @@ Panel {
   Service {
     id: ports
     settings: root.settings
-    onTerminalUnavailable: root.open()
   }
 
   TextMetrics {
@@ -269,7 +268,7 @@ Panel {
     property int navIndex: 0
     signal triggered()
 
-    hasCursor: root.cursorIndex === navIndex
+    hasCursor: enabled && root.cursorIndex === navIndex
     foreground: root.foreground
     implicitHeight: root.rowHeight
     opacity: enabled ? 1 : 0.45

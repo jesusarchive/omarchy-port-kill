@@ -63,10 +63,18 @@ unload stops the watcher in both modes.
 
 ## Scanning and port actions
 
-The widget stays hidden until scan and tracking dependencies are checked.
-Missing dependencies keep it hidden while existing retries check for recovery.
-The scan preflight checks Port Kill, lsof, Python, timeout, and flock. Terminal
-availability does not gate the widget; a failed log launch opens the menu.
+Visibility follows the monitoring mode. Missing dependencies leave the icon grey
+and port actions disabled, without dependency messages in the menu or tooltip.
+The scan preflight checks Port Kill, lsof, Python, timeout, and flock.
+Tracking retries continue for
+missing dependencies in both modes, backing off to once per minute. Ordinary
+inactive Follow terminal mode still runs no recurring work.
+
+Right-click does nothing when dependencies are missing. Otherwise it opens or
+focuses logs, including during scans or port actions. Terminal availability does
+not gate port actions. An unavailable terminal or TUI fails silently without
+opening the menu; ordinary runtime failures still report their error. Repeated
+clicks during terminal startup reuse the pending controller.
 
 The watcher reads socket tables at the configured interval. A change on ports
 2000 through 9000 requests a full Port Kill scan. Background requests start at

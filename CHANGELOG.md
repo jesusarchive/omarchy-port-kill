@@ -6,8 +6,11 @@ These changes target plugin version 0.4.0.
 
 ### Monitoring and controls
 
-- Hide the bar widget while required dependencies are missing, without a
-  dependency tooltip. Right-click falls back to the menu if logs cannot open.
+- Keep the icon grey and port actions disabled when dependencies are missing,
+  without dependency messages in the menu or tooltip. Right-click does nothing
+  while dependencies are missing. Missing dependencies retry in both modes.
+- Remove the right-click menu fallback. Repeated clicks during terminal startup
+  reuse the pending controller.
 - Plugin-opened terminals now default to quieter logging while retaining
   process-status output, warnings, and errors. Explicit logging preferences and
   manually entered commands keep their behavior. The menu retains Omarchy styling.

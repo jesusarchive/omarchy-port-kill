@@ -312,27 +312,35 @@ test("malformed output is reported, and failed scans retry without socket change
 })
 
 for (const mode of ["terminal", "always"]) {
-  test(`missing backend keeps ${mode} mode hidden until installation`, { skip, timeout: 20000 }, async t => {
+  test(`missing backend keeps ${mode} mode visible with actions disabled`, { skip, timeout: 20000 }, async t => {
     const h = harness(t, { backendMissing: true })
+    const script = path.join(h.config, "portkill.sh")
+    fs.renameSync(script, path.join(h.config, "original.sh"))
+    writeExecutable(script, [
+      `[[ $1 == logs ]] && echo attempt >> '${h.ctl}/log-attempts'`,
+      `exec bash '${h.config}/original.sh' "$@"`
+    ])
     await h.start()
     h.call("mode", mode)
     if (mode === "terminal") await h.launch()
     const state = await h.wait(s => s.active && s.status === "missing", 5000, "missing")
-    assert.equal(state.widgetVisible, false)
+    assert.equal(state.widgetVisible, true)
     assert.equal(state.canAct, false)
-    assert.ok(state.history.every(event => !event.widgetVisible), "no startup icon flash")
+    assert.equal(state.dependenciesAvailable, false)
     h.call("debug")
-    await sleep(100)
+    await sleep(150)
     assert.equal(h.state().terminalError, "")
+    assert.equal(fs.existsSync(path.join(h.ctl, "log-attempts")), false)
+    assert.equal(h.children().some(command => command.includes("terminal_logs.py")), false)
     fs.copyFileSync(path.join(h.dir, "bin", "port-kill-console"), path.join(h.dir, "missing"))
-    await h.wait(s => s.widgetVisible && s.canAct, 5000, "appears after installation")
+    await h.wait(s => s.widgetVisible && s.canAct, 5000, "actions enabled after installation")
     fs.unlinkSync(path.join(h.dir, "missing"))
     h.call("open")
-    await h.wait(s => !s.widgetVisible && s.status === "missing", 5000, "hidden after removal")
+    await h.wait(s => s.widgetVisible && !s.canAct && s.status === "missing", 5000, "disabled after removal")
   })
 }
 
-test("dependency failures hide the widget, ordinary scan failures remain visible", { skip, timeout: 20000 }, async t => {
+test("dependency failures keep the widget visible without dependency tooltips", { skip, timeout: 20000 }, async t => {
   const h = harness(t)
   const script = path.join(h.config, "portkill.sh")
   fs.renameSync(script, path.join(h.config, "original.sh"))
@@ -346,10 +354,10 @@ test("dependency failures hide the widget, ordinary scan failures remain visible
   h.set("dependency-code", 4)
   await h.start()
   h.call("mode", "always")
-  await h.wait(s => s.status === "no-lsof" && !s.widgetVisible, 5000, "missing lsof")
+  await h.wait(s => s.status === "no-lsof" && s.widgetVisible && !s.canAct, 5000, "missing lsof")
   h.set("dependency-code", 3)
   h.call("open")
-  await h.wait(s => s.status === "missing" && !s.widgetVisible, 5000, "missing helper")
+  await h.wait(s => s.status === "missing" && s.widgetVisible && !s.canAct, 5000, "missing helper")
   h.unset("dependency-code")
   await h.wait(s => s.canAct && s.widgetVisible, 5000, "dependencies restored")
   h.set("list.exit", 1)
@@ -357,7 +365,7 @@ test("dependency failures hide the widget, ordinary scan failures remain visible
   await h.wait(s => s.status === "error" && s.widgetVisible, 5000, "ordinary error visible")
 })
 
-test("a dependency removed before an action hides the widget without leaving an error", { skip, timeout: 15000 }, async t => {
+test("a dependency removed before an action disables actions without dependency tooltips", { skip, timeout: 15000 }, async t => {
   const h = harness(t)
   await h.start()
   h.call("mode", "always")
@@ -365,8 +373,9 @@ test("a dependency removed before an action hides the widget without leaving an 
   const binary = path.join(h.dir, "bin", "port-kill-console")
   fs.renameSync(binary, binary + ".saved")
   h.call("kill", 3000)
-  await h.wait(s => !s.widgetVisible && !s.busy, 5000, "hidden")
+  await h.wait(s => s.widgetVisible && !s.canAct && !s.dependenciesAvailable && !s.busy, 5000, "disabled")
   assert.equal(h.state().actionError, "")
+  assert.equal(h.state().dependenciesAvailable, false)
   fs.renameSync(binary + ".saved", binary)
   await h.wait(s => s.widgetVisible && s.canAct, 5000, "restored")
   assert.equal(h.state().actionError, "")
@@ -546,7 +555,7 @@ test("on-demand logs open once, reopen after closing, and end with the shell", {
   await h.start();
   h.call("mode", "always");
   assert.equal(pid(), 0);
-  await h.wait(s => s.widgetVisible, 4000, "monitoring visible");
+  await h.wait(s => s.widgetVisible && s.canAct, 4000, "monitoring ready");
   h.call("debug");
   await until(pid, 4000, "debug terminal opened");
   const first = pid();
@@ -583,19 +592,47 @@ test("on-demand logs open once, reopen after closing, and end with the shell", {
 });
 
 for (const missing of ["terminal", "TUI"]) {
-  test(`right-click falls back to the menu without a tooltip when ${missing} is unavailable`, { skip, timeout: 15000 }, async t => {
+  test(`right-click fails silently when ${missing} becomes unavailable`, { skip, timeout: 15000 }, async t => {
     const h = harness(t)
     writeExecutable(path.join(h.dir, "bin", "xdg-terminal-exec"), ["exit 7"])
+    const script = path.join(h.config, "portkill.sh")
+    fs.renameSync(script, path.join(h.config, "original.sh"))
+    writeExecutable(script, [
+      `[[ $1 == logs ]] && echo attempt >> '${h.ctl}/log-attempts'`,
+      `exec bash '${h.config}/original.sh' "$@"`
+    ])
     await h.start()
     h.call("mode", "always")
     await h.wait(s => s.widgetVisible && s.canAct, 5000, "widget ready")
     if (missing === "TUI") fs.unlinkSync(path.join(h.dir, "bin", "port-kill-console"))
     h.call("debug")
-    const state = await h.wait(s => s.menuFallbacks === 1, 5000, "menu fallback")
-    assert.equal(state.terminalError, "")
-    if (missing === "terminal") assert.equal(state.widgetVisible, true)
+    await until(() => fs.existsSync(path.join(h.ctl, "log-attempts")), 2000, "log attempt")
+    await until(() => !h.children().some(command => /terminal_logs.py|original.sh logs|portkill.sh logs/.test(command)), 5000, "log attempt ended")
+    assert.equal(h.state().terminalError, "")
+    if (missing === "terminal") assert.equal(h.state().canAct, true)
   })
 }
+
+test("right-click still opens one TUI during a refresh", { skip, timeout: 15000 }, async t => {
+  const h = harness(t)
+  writeExecutable(path.join(h.dir, "bin", "xdg-terminal-exec"), [
+    `echo launch >> '${h.ctl}/launches'`,
+    'while [[ $# -gt 0 && $1 != -- ]]; do shift; done', 'shift',
+    `"$@" > '${h.ctl}/terminal.log' 2>&1 &`, 'exit 0'
+  ])
+  await h.start()
+  h.call("mode", "always")
+  await h.wait(s => s.canAct, 5000, "ready")
+  h.set("list.sleep", "0.8")
+  h.call("open")
+  await h.wait(s => s.refreshing && !s.canAct && s.dependenciesAvailable, 2000, "refreshing")
+  h.call("debug")
+  await until(() => {
+    try { return fs.readFileSync(path.join(h.ctl, "terminal.log"), "utf8").includes("monitor") }
+    catch { return false }
+  }, 4000, "TUI opened during refresh")
+  assert.equal(fs.readFileSync(path.join(h.ctl, "launches"), "utf8").trim(), "launch")
+})
 
 test("right-click reuses a manually started Port Kill terminal", { skip, timeout: 15000 }, async t => {
   const h = harness(t);
@@ -706,7 +743,7 @@ test("an abruptly killed log display leaves no backend and can be reopened", { s
   ]);
   await h.start();
   h.call("mode", "always");
-  await h.wait(s => s.widgetVisible, 4000, "monitoring visible");
+  await h.wait(s => s.widgetVisible && s.canAct, 4000, "monitoring ready");
   h.call("debug");
   const log = path.join(h.ctl,"terminal.log");
   const backendPid = () => { try { return Number(fs.readFileSync(log,"utf8").trim().split(" ")[1]); } catch { return 0; } };
@@ -720,3 +757,60 @@ test("an abruptly killed log display leaves no backend and can be reopened", { s
   h.call("debug");
   await until(() => backendPid() && backendPid() !== pid, 4000, "replacement log backend");
 });
+
+test("repeated right-clicks during terminal startup open one TUI", { skip, timeout: 15000 }, async t => {
+  const h = harness(t)
+  writeExecutable(path.join(h.dir, "bin", "xdg-terminal-exec"), [
+    'while [[ $# -gt 0 && $1 != -- ]]; do shift; done', 'shift',
+    `echo launching >> '${h.ctl}/launching'`,
+    'sleep 1',
+    `"$@" > '${h.ctl}/terminal.log' 2>&1 &`, 'exit 0'
+  ])
+  await h.start()
+  h.call("mode", "always")
+  await h.wait(s => s.widgetVisible && s.canAct, 5000, "ready")
+  h.call("debug")
+  await until(() => fs.existsSync(path.join(h.ctl, "launching")), 2000, "launching")
+  h.call("debug")
+  await until(() => fs.existsSync(path.join(h.ctl, "terminal.log")) && fs.readFileSync(path.join(h.ctl, "terminal.log"), "utf8").includes("monitor"), 4000, "terminal opened")
+  assert.equal(fs.readFileSync(path.join(h.ctl, "launching"), "utf8").trim(), "launching")
+  assert.equal(h.state().terminalError, "")
+})
+
+
+test("Follow terminal keeps retrying a missing tracking dependency and recovers", { skip, timeout: 15000 }, async t => {
+  const h = harness(t)
+  const qml = path.join(h.config, "shell.qml")
+  fs.writeFileSync(qml, fs.readFileSync(qml, "utf8").replace("watchdogGraceMs: 1000", "watchdogGraceMs: 1000\n    watcherRetryBaseMs: 10\n    watcherRetryMaxMs: 100"))
+  const script = path.join(h.config, "portkill.sh")
+  fs.renameSync(script, path.join(h.config, "original.sh"))
+  writeExecutable(script, [
+    `if [[ $1 == watch && -f '${h.ctl}/missing-python' ]]; then`,
+    `  echo attempt >> '${h.ctl}/watch-attempts'`,
+    '  echo "Port Kill needs Python 3 to track monitors" >&2; exit 3',
+    'fi',
+    `exec bash '${h.config}/original.sh' "$@"`
+  ])
+  await h.start()
+  const monitor = await h.launch()
+  await h.wait(s => s.canAct, 5000, "registered monitor active")
+  h.set("missing-python", 1)
+  h.call("mode", "always")
+  h.call("mode", "terminal")
+  const attempts = () => {
+    try { return fs.readFileSync(path.join(h.ctl, "watch-attempts"), "utf8").trim().split("\n").length }
+    catch { return 0 }
+  }
+  await until(() => attempts() >= 7, 5000, "retry beyond initial budget")
+  const state = h.state()
+  assert.equal(state.widgetVisible, true)
+  assert.equal(state.canAct, false)
+  assert.equal(state.dependenciesAvailable, false)
+  h.unset("missing-python")
+  await h.wait(s => s.canAct && s.dependenciesAvailable, 5000, "dependency recovery")
+  await stopMonitor(monitor)
+  await h.wait(s => !s.widgetVisible, 5000, "last terminal closes")
+  const scans = h.calls().length
+  await sleep(300)
+  assert.equal(h.calls().length, scans)
+})

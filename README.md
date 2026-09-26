@@ -53,7 +53,8 @@ This defines shell functions; the installed binaries are unchanged.
 
 Left-click the icon to open the menu. Right-click to open activity logs or
 focus an existing Port Kill terminal. Repeated right-clicks reuse that window.
-If the terminal or TUI cannot start, right-click opens the menu instead.
+During a refresh, right-click still opens logs.
+Right-click does nothing when required dependencies are missing.
 
 | Menu item | Action |
 | --- | --- |
@@ -105,10 +106,10 @@ only to that terminal. The bar continues to use ports 2000 through 9000.
 
 ## Troubleshooting
 
-- The icon stays hidden while required dependencies are missing and appears
-  after they become available. Check the requirements above. In Follow terminal
-  mode, also start Port Kill through the launcher or Bash integration.
-- If right-click opens the menu instead of logs, check your terminal and
+- Missing dependencies leave the icon grey and port actions disabled. Check the
+  requirements above. Actions become available when dependencies are restored.
+  Follow terminal mode still needs a tracked terminal to be active.
+- If right-click does not open logs, check your terminal and
   `port-kill-console` installation. An existing terminal that cannot be
   identified reports an error rather than opening a duplicate.
 - If an action fails, read the tooltip, check the requirements, and retry once

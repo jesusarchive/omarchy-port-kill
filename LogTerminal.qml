@@ -11,7 +11,6 @@ Item {
 
   signal errorReported(string message)
   signal finished(int exitCode, string stderr)
-  signal unavailable()
 
   function missingDependency(exitCode) {
     return exitCode === 3 || exitCode === 4
@@ -55,7 +54,6 @@ Item {
     onExited: function(exitCode) {
       if (exitCode !== 0 && !root.missingDependency(exitCode) && focusStderr.text)
         root.errorReported(String(focusStderr.text))
-      if (exitCode !== 0) root.unavailable()
     }
   }
 
@@ -69,7 +67,6 @@ Item {
       var stderr = String(terminalStderr.text || "")
       if (exitCode !== 0 && !root.missingDependency(exitCode) && root.requested)
         root.errorReported(stderr || "Could not open the log terminal")
-      if (exitCode !== 0 && root.requested) root.unavailable()
       // A request can arrive while the previous controller is closing.
       if (!stdinEnabled && root.requested) Qt.callLater(root.updateRequest)
       else root.requested = false

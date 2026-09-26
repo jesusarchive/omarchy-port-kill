@@ -13,8 +13,7 @@ Item {
   property bool scanDependenciesAvailable: false
   property bool trackingDependenciesAvailable: false
   readonly property bool dependenciesAvailable: scanDependenciesAvailable && trackingDependenciesAvailable
-  readonly property bool widgetVisible: active && dependenciesAvailable
-  signal terminalUnavailable()
+  readonly property bool widgetVisible: active
   property bool stoppedByUser: false
   property bool quitting: false
   property bool quitCommandDone: false
@@ -23,8 +22,7 @@ Item {
   property string pendingStart: ""
   property string checkingGeneration: ""
   property int monitorCount: 0
-  // "starting" (no scan yet), "ready", "missing" (no Port Kill), "no-lsof",
-  // "timeout" or "error". After a failure, rows keep the last good scan.
+  // Failed scans keep the last good rows, but disable port actions.
   property string status: "starting"
   property string scanError: ""
   property string actionError: ""
@@ -44,7 +42,7 @@ Item {
   readonly property bool busy: acting || quitting
   // Kills act on ports as Port Kill sees them when the action runs, so only
   // offer them while the displayed list is current.
-  readonly property bool canAct: widgetVisible && !stoppedByUser && ready && !busy && !refreshing && !refreshRequired && !socketError && !watchError
+  readonly property bool canAct: active && dependenciesAvailable && !stoppedByUser && ready && !busy && !refreshing && !refreshRequired && !socketError && !watchError
   readonly property string portKillScript: localPath("portkill.sh")
 
   // Deadlines passed to portkill.sh. The watchdogs below only fire if the
@@ -52,6 +50,8 @@ Item {
   property int scanTimeoutSec: 10
   property int actionTimeoutSec: 20
   property int watchdogGraceMs: 5000
+  property int watcherRetryBaseMs: 1000
+  property int watcherRetryMaxMs: 60000
 
   // Scheduler timings; tests shorten them.
   property var scheduleOptions: ({})
@@ -110,6 +110,7 @@ Item {
       return
     }
     watcherFailures = 0
+    watcherRetry.stop()
     trackingDependenciesAvailable = true
     watchError = ""
     if (event.type === "monitors") {
@@ -170,17 +171,15 @@ Item {
     watchError = elide(stderr || "Monitor tracking exited with code " + exitCode)
     console.warn("Port Kill: " + watchError)
     if (watcherFailures <= 5) {
-      watcherRetry.interval = 1000 * Math.pow(2, watcherFailures - 1)
+      watcherRetry.interval = Math.min(watcherRetryMaxMs, watcherRetryBaseMs * Math.pow(2, watcherFailures - 1))
       watcherRetry.restart()
     } else {
-      // Without tracking there is no way to know when monitors exit. Hide
-      // rather than leave an icon that may never go away; the next monitor
-      // start tries again.
-      if (alwaysActive) {
-        // Keep errors visible and retry at a bounded rate in always mode.
-        watcherRetry.interval = 60000
+      if (alwaysActive || exitCode === 3) {
+        // A missing dependency may be installed while a monitor is still open.
+        watcherRetry.interval = watcherRetryMaxMs
         watcherRetry.restart()
       } else {
+        // An unknown tracking failure cannot reliably follow terminal exits.
         watcherFailures = 0
         setActive(false)
       }
@@ -190,6 +189,7 @@ Item {
   // Scans
 
   function refresh() {
+    if (!trackingDependenciesAvailable) reconcile()
     refreshRequired = true
     Scheduler.request(schedule, true)
     pump()
@@ -275,7 +275,7 @@ Item {
   }
 
   function openTerminalLogs() {
-    if (quitting || !widgetVisible) return
+    if (quitting || !widgetVisible || !dependenciesAvailable) return
     logTerminal.open()
   }
 
@@ -353,6 +353,8 @@ Item {
     if (!quitting && (exitCode === 3 || exitCode === 4)) {
       scanDependenciesAvailable = false
       actionError = ""
+      status = exitCode === 3 ? "missing" : "no-lsof"
+      scanError = elide(stderr)
     } else if (exitCode !== 0) {
       actionError = elide(exitCode === 6 || exitCode === -1
         ? (stderr || "Port Kill did not finish in time") + ". It was not retried."
@@ -453,7 +455,6 @@ Item {
   LogTerminal {
     id: logTerminal
     scriptPath: root.portKillScript
-    onUnavailable: if (!root.quitting && root.widgetVisible) root.terminalUnavailable()
     onErrorReported: function(message) { root.terminalError = root.elide(message) }
     onFinished: function(exitCode, stderr) {
       if (exitCode !== 0 && root.quitting) {

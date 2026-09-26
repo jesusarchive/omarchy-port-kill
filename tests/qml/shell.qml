@@ -10,7 +10,6 @@ ShellRoot {
 
   property var history: []
   property string mode: "terminal"
-  property int menuFallbacks: 0
 
   function record(event) {
     var next = history.slice()
@@ -37,7 +36,6 @@ ShellRoot {
     onStatusChanged: shell.record("status")
     onRowsChanged: shell.record("rows")
     onActionErrorChanged: shell.record("actionError")
-    onTerminalUnavailable: shell.menuFallbacks++
   }
 
   IpcHandler {
@@ -46,7 +44,7 @@ ShellRoot {
       return JSON.stringify({
         active: ports.active,
         widgetVisible: ports.widgetVisible,
-        menuFallbacks: shell.menuFallbacks,
+        dependenciesAvailable: ports.dependenciesAvailable,
         monitoringMode: ports.monitoringMode,
         refreshing: ports.refreshing,
         monitorCount: ports.monitorCount,
