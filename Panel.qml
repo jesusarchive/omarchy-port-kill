@@ -13,10 +13,11 @@ Panel {
   property int cursorIndex: 0
 
   readonly property int processCount: Model.processCount(ports.rows)
-  // Kill All, one row per port/PID pair, then Quit.
   readonly property int itemCount: ports.rows.length + 2
   readonly property int quitIndex: itemCount - 1
-  readonly property bool hasError: !ports.ready || ports.actionError !== ""
+  // Grey means the list is not current: the first scan is pending, the last
+  // one failed, or an action failed.
+  readonly property bool hasError: !ports.ready || ports.actionError !== "" || ports.socketError !== "" || ports.watchError !== ""
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   // The menu clips its rows; keep them 1px inside so the cursor border on the
@@ -76,18 +77,19 @@ Panel {
   }
 
   function kill(row) {
-    if (!row) return
-    if (!ports.busy) ports.kill(row)
+    if (!row || !ports.canAct) return
+    ports.kill(row)
     close()
   }
 
   function killAll() {
-    if (!ports.ready) return
-    if (!ports.busy) ports.killAll()
+    if (!ports.canAct) return
+    ports.killAll()
     close()
   }
 
   function quit() {
+    if (ports.busy) return
     ports.quit()
     close()
   }
@@ -98,8 +100,24 @@ Panel {
     else kill(selectedRow())
   }
 
-  // Show the widget only while a Port Kill monitor runs.
-  visible: ports.running
+  function tooltip() {
+    var time = ports.lastScanAt ? Qt.formatTime(ports.lastScanAt, "HH:mm:ss") : ""
+    var staleNote = ports.stale ? " Showing the list from " + time + "." : ""
+    if (ports.terminalError) return ports.terminalError
+    if (ports.actionError) return ports.actionError
+    if (ports.watchError) return ports.watchError + staleNote
+    if (ports.status === "missing") return "Port Kill is not installed"
+    if (ports.status === "no-lsof") return "Port Kill needs lsof"
+    if (ports.status === "timeout" || ports.status === "error") return ports.scanError + staleNote
+    if (ports.status === "starting") return "Checking ports..."
+    if (ports.refreshing) return "Refreshing ports... Last checked " + time + "."
+    var text = processCount === 0 ? "No development processes running"
+      : processCount + (processCount === 1 ? " development process running" : " development processes running")
+    return ports.socketError ? text + ". Change detection failed: " + ports.socketError : text
+  }
+
+  // Both modes keep the same live status colors, including green when empty.
+  visible: ports.active
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -145,14 +163,11 @@ Panel {
         }
       }
     }
-    tooltipText: ports.actionError ? ports.actionError
-      : ports.status === "error" ? ports.scanError
-      : ports.status === "missing" ? "Port Kill is not installed"
-      : ports.status === "no-lsof" ? "Port Kill needs lsof"
-      : root.processCount === 0 ? "No development processes running"
-      : root.processCount + (root.processCount === 1 ? " development process running" : " development processes running")
-    onPressed: root.toggle()
-
+    tooltipText: root.tooltip()
+    onPressed: function(mouseButton) {
+      if (mouseButton === Qt.RightButton) ports.openTerminalLogs()
+      else if (mouseButton === Qt.LeftButton) root.toggle()
+    }
   }
 
   KeyboardPanel {
@@ -206,7 +221,7 @@ Panel {
             width: parent.width
             label: "Kill All Processes"
             navIndex: 0
-            enabled: ports.ready
+            enabled: ports.canAct
             onTriggered: root.killAll()
           }
 
@@ -225,6 +240,7 @@ Panel {
               width: parent.width
               label: Model.menuLabel(modelData)
               navIndex: index + 1
+              enabled: ports.canAct
               onTriggered: root.kill(modelData)
             }
           }
@@ -239,6 +255,7 @@ Panel {
             width: parent.width
             label: "Quit"
             navIndex: root.quitIndex
+            enabled: !ports.busy
             onTriggered: root.quit()
           }
         }

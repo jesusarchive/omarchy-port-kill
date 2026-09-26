@@ -1,42 +1,82 @@
 // Parse Port Kill's JSON output and format the menu. QML loads this file, and
 // Node.js runs the same functions in tests.
 
-// portkill.sh list prints one Port Kill process record per line.
+// Lines Port Kill 0.5 prints on stdout besides its records: a debug line and
+// the update notice. Anything else is reported rather than guessed at.
+var KNOWN_LOG_LINES = [
+  /^DEBUG: /,
+  /^🔄 Update Available!$/,
+  /^=+$/,
+  /^Current version: /,
+  /^Latest version: /,
+  /^📥 To update:$/,
+  /^curl .*install-release\.sh \| bash$/,
+  /^🔗 Release notes: /
+]
+
+function isKnownLogLine(line) {
+  for (var i = 0; i < KNOWN_LOG_LINES.length; i++) {
+    if (KNOWN_LOG_LINES[i].test(line)) return true
+  }
+  return false
+}
+
+function isInteger(value, min, max) {
+  return typeof value === "number" && value % 1 === 0 && value >= min && value <= max
+}
+
+function optionalString(value) {
+  return value === undefined || value === null || typeof value === "string"
+}
+
+// portkill.sh list prints Port Kill's stdout: one process record per line,
+// mixed with log lines. Returns { rows, errors }. Empty output is a valid
+// empty list; malformed or incompatible records are errors, and callers must
+// not present a list that has errors as complete.
 function parsePortKill(raw) {
   var rows = []
+  var errors = []
   var seen = {}
   var lines = String(raw || "").split("\n")
 
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i].trim()
-    if (line.charAt(0) !== "{") continue
+    if (line === "") continue
+    if (line.charAt(0) !== "{") {
+      if (!isKnownLogLine(line)) errors.push("Unrecognized Port Kill output: " + line)
+      continue
+    }
     var record
     try {
       record = JSON.parse(line)
     } catch (e) {
+      errors.push("Malformed Port Kill record: " + line)
       continue
     }
-    var port = Number(record.port)
-    var pid = Number(record.pid)
-    if (!isFinite(port) || port % 1 !== 0 || port < 1 || port > 65535) continue
-    if (!isFinite(pid) || pid % 1 !== 0 || pid < 1) continue
+    if (!record || typeof record !== "object" || Array.isArray(record)
+        || !isInteger(record.port, 1, 65535) || !isInteger(record.pid, 1, 4194304)
+        || !optionalString(record.name) || !optionalString(record.command)
+        || !optionalString(record.container_name)) {
+      errors.push("Incompatible Port Kill record: " + line)
+      continue
+    }
 
-    var key = port + ":" + pid
+    var key = record.port + ":" + record.pid
     if (seen[key]) continue
     seen[key] = true
     rows.push({
       key: key,
-      port: port,
-      pid: pid,
-      name: String(record.name || record.command || "process"),
-      container: String(record.container_name || "")
+      port: record.port,
+      pid: record.pid,
+      name: record.name || record.command || "process",
+      container: record.container_name || ""
     })
   }
 
   rows.sort(function(a, b) {
-    return a.port - b.port || a.name.localeCompare(b.name)
+    return a.port - b.port || a.name.localeCompare(b.name) || a.pid - b.pid
   })
-  return rows
+  return { rows: rows, errors: errors }
 }
 
 // Port Kill's own menu label, including its Docker suffix.
@@ -67,9 +107,24 @@ function statusColor(count) {
   return "#ff0000"
 }
 
+// Watcher events are one JSON object per line. Returns null for anything else.
+function parseWatcherEvent(line) {
+  var event
+  try {
+    event = JSON.parse(String(line || ""))
+  } catch (e) {
+    return null
+  }
+  if (!event || typeof event !== "object") return null
+  if (event.type === "monitors" && isInteger(event.count, 0, 1e9)) return event
+  if (event.type === "sockets" && (typeof event.signature === "string" || typeof event.error === "string")) return event
+  return null
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     parsePortKill: parsePortKill,
+    parseWatcherEvent: parseWatcherEvent,
     menuLabel: menuLabel,
     processCount: processCount,
     statusColor: statusColor
