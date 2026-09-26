@@ -188,12 +188,10 @@ Panel {
         if (dy !== 0) root.moveCursor(dy)
       }
       onActivateRequested: root.activateCursor()
-      onDeleteRequested: root.kill(root.selectedRow())
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(text) {
         if (text === "r" || text === "R") ports.refresh()
-        else if (text === "a" || text === "A") root.killAll()
       }
 
       Flickable {

@@ -100,8 +100,6 @@ only to that terminal. The bar continues to use ports 2000 through 9000.
 | --- | --- |
 | Up / Down or `k` / `j` | Move through the menu |
 | Enter / Space | Activate the selected item |
-| `x` | Stop the selected port |
-| `a` | Kill All Processes |
 | `r` | Refresh the list |
 | Tab / Shift+Tab | Switch to the next / previous bar panel |
 | Escape | Close the menu |
