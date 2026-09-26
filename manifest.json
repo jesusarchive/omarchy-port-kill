@@ -5,7 +5,7 @@
   "version": "0.4.0",
   "author": "jesusarchive",
   "license": "MIT",
-  "description": "View and stop development processes from the Omarchy bar.",
+  "description": "Free up development ports from the Omarchy bar.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Port Kill",
-    "description": "Manage processes listening on ports 2000 through 9000.",
+    "description": "Free up development ports from the Omarchy bar.",
     "category": "System",
     "aliases": [
       "ports",
