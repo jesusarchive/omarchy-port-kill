@@ -56,6 +56,8 @@ focus an existing Port Kill terminal. Repeated right-clicks reuse that window.
 During a refresh, right-click still opens logs.
 Right-click does nothing when required dependencies are missing.
 
+![Port Kill terminal monitor](assets/terminal.png)
+
 | Menu item | Action |
 | --- | --- |
 | Kill All Processes | Stop processes listening on ports 2000 through 9000. |
