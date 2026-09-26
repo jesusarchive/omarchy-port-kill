@@ -3,7 +3,7 @@
 Find and free development ports from the Omarchy bar with
 [Port Kill](https://portkill.com/).
 
-![Port Kill bar menu with example development servers](preview.png)
+![Port Kill bar icon and menu with example development servers](preview.png)
 
 This is an independent integration of [Port Kill](https://github.com/treadiehq/port-kill).
 The plugin uses `port-kill-console` to list and stop processes. Choose whether
@@ -66,7 +66,7 @@ it as before. Left-click the bar icon to open the menu. Right-click it to
 open or focus a terminal with Port Kill activity logs, without changing your settings.
 The bar uses Port Kill's default range of ports 2000 through 9000.
 
-![Port Kill menu](assets/menu.png)
+![Port Kill bar icon and menu](assets/menu.png)
 
 - **Kill All Processes** stops processes on ports 2000 through 9000.
 - **Kill: Port N: process** asks Port Kill to stop what listens on port N.
