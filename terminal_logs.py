@@ -196,10 +196,16 @@ def own_locked(binary):
                         display_lease = directory / f"{pid}.{start_time(Path('/proc'), pid)}"
                         display_lease.touch(mode=0o600)
                         parent = os.getpid()
+                        # The macOS tray app does not enable INFO logging by
+                        # default. Keep console status output without its
+                        # internal scan chatter, unless the user chose a level.
+                        backend_environment = os.environ.copy()
+                        backend_environment.setdefault("RUST_LOG", "warn")
                         # The controller owns the backend. The display only
                         # lends its tty and holds a connection while visible.
                         backend = subprocess.Popen([binary], stdin=descriptors[0],
                             stdout=descriptors[1], stderr=descriptors[2],
+                            env=backend_environment,
                             start_new_session=True, preexec_fn=lambda: child_setup(parent))
                         backend_fd = os.pidfd_open(backend.pid)
                     finally:

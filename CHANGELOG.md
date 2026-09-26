@@ -6,6 +6,9 @@ These changes target plugin version 0.4.0.
 
 ### Monitoring and controls
 
+- Plugin-opened terminals now default to quieter logging while retaining
+  process-status output, warnings, and errors. Explicit logging preferences and
+  manually entered commands keep their behavior. The menu retains Omarchy styling.
 - Added Follow terminal and Always active modes in plugin settings. Follow
   terminal is the default; saved mode and check-interval choices are preserved.
 - Added optional Bash integration and a registered app-launcher command.

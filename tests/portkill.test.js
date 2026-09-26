@@ -108,7 +108,7 @@ function alive(pid) {
   try { process.kill(pid, 0); return true } catch { return false }
 }
 
-test("launch preserves console output, exit status and environment", t => {
+test("launch preserves output and exit status with quieter default logging", t => {
   const env = fakeEnv(t)
   writeExecutable(env.consolePath, [
     "env | grep -v '^_=' | sort",
@@ -118,7 +118,9 @@ test("launch preserves console output, exit status and environment", t => {
   for (const settings of [{}, { RUST_LOG: "info", LC_ALL: "C", LANG: "C", SHLVL: "3" }]) {
     const options = { encoding: "utf8", env: { ...env.env, ...settings } }
     // Run the console the way a shell would: from bash, with the same variables.
-    const direct = spawnSync("bash", ["-c", 'exec "$0"', env.consolePath], options)
+    const direct = spawnSync("bash", ["-c", 'exec "$0"', env.consolePath], {
+      ...options, env: { ...options.env, RUST_LOG: options.env.RUST_LOG || "warn" }
+    })
     const wrapped = spawnSync("bash", [script, "launch"], options)
     assert.equal(wrapped.status, 7)
     assert.equal(wrapped.status, direct.status)

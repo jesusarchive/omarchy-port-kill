@@ -183,6 +183,9 @@ case $action in
   launch)
     (($# == 1)) || die "Usage: portkill.sh launch"
     require_backend
+    # Plugin-opened terminals use quieter defaults, like the macOS tray app.
+    # Explicit logging preferences and the Bash `run` path stay unchanged.
+    export RUST_LOG=${RUST_LOG:-warn}
     run_monitor "$port_kill"
     ;;
   run)

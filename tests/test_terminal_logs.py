@@ -37,7 +37,7 @@ class TerminalLogsTests(unittest.TestCase):
             self.assertEqual(result.stderr, '')
             self.assertEqual(sorted(path.relative_to(plugin) for path in plugin.rglob('*')), before)
 
-    def start(self, delay=0, ignore_term=False, launch_code=None):
+    def start(self, delay=0, ignore_term=False, launch_code=None, rust_log=None):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         directory = Path(tmp.name)
@@ -45,6 +45,7 @@ class TerminalLogsTests(unittest.TestCase):
         backend = directory / 'backend'
         backend.write_text(
             '#!/bin/bash\n' + ('trap "" TERM\n' if ignore_term else '')
+            + f'printf "%s" "${{RUST_LOG-unset}}" > "{directory / "log-level"}"\n'
             + f'echo $$ > "{started}"\nwhile :; do sleep 0.1; done\n'
         )
         backend.chmod(0o755)
@@ -53,10 +54,15 @@ class TerminalLogsTests(unittest.TestCase):
             + (f'exit {launch_code}\n' if launch_code is not None else
                f'while [[ $1 != -- ]]; do shift; done\nshift\nsleep {delay}\nexec "$@"\n'))
         launcher.chmod(0o755)
+        environment = {**os.environ, 'PATH': f'{directory}:{os.environ["PATH"]}',
+                       'PORT_KILL_STATE_DIR': str(directory / 'state')}
+        environment.pop('RUST_LOG', None)
+        if rust_log is not None:
+            environment['RUST_LOG'] = rust_log
         owner = subprocess.Popen(
             [sys.executable, str(ROOT / 'terminal_logs.py'), 'own', str(backend)],
             stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-            env={**os.environ, 'PATH': f'{directory}:{os.environ["PATH"]}', 'PORT_KILL_STATE_DIR': str(directory / 'state')},
+            env=environment,
         )
 
         def cleanup():
@@ -96,6 +102,15 @@ class TerminalLogsTests(unittest.TestCase):
         owner.stdin.close()
         self.wait_exited(pid)
         self.assertEqual(owner.wait(timeout=2), 0)
+
+    def test_logs_default_to_warnings_and_preserve_explicit_logging(self):
+        for requested, expected in ((None, 'warn'), ('debug', 'debug')):
+            with self.subTest(requested=requested):
+                owner, started = self.start(rust_log=requested)
+                self.wait_started(started)
+                self.assertEqual((started.parent / 'log-level').read_text(), expected)
+                owner.stdin.close()
+                self.assertEqual(owner.wait(timeout=3), 0)
 
     def test_abrupt_controller_exit_stops_term_ignoring_backend(self):
         owner, started = self.start(ignore_term=True)

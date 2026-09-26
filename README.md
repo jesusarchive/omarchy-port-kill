@@ -131,6 +131,13 @@ right-click does not count as a registered monitor and cannot keep that mode
 active on its own. Both show Port Kill's usual activity output and run their
 own scan loop. They are not a viewer for the shell's internal diagnostic logs.
 
+The app launcher and new right-click log windows default to `RUST_LOG=warn`.
+This keeps process-status output, warnings, and errors visible while reducing
+internal INFO messages, closer to the macOS app's default output. An explicit
+`RUST_LOG` setting is respected. Commands typed through the Bash integration
+keep their original logging behavior, as do existing terminals reused by
+right-click. The bar menu keeps Omarchy's styling and keyboard controls.
+
 | Action | Follow terminal | Always active |
 | --- | --- | --- |
 | Close a registered TUI or press Ctrl+C | Monitoring ends after the last registered TUI exits; the icon and any plugin-created log window close. | That TUI stops; monitoring and the icon remain. |
